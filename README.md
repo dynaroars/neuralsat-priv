@@ -15,11 +15,15 @@
 
 ## FEATURES
 
+- **fully automatic**, **ease of use** and requires very little configurations or expert knowledge
+  - NeuralSAT requires *no* parameter tuning (a huge engineering effort that researchers often don't pay attention to)!  In fact, you can just apply NeuralSAT *as is* to check your networks and desired properties.  The user *does not* have to do any configuration or tweaking.  It just works!
+    - But of course if you're an expert (or want to break the tool), you are welcome to tweak its internal settings.  
+  - This is what makes NeuralSAT different from other DNN verifiers (e.g., AB-Crown), which require lots of tuning to work well.
+
 - **standard** input and output formats
   - input: `onnx` for neural networks and `vnnlib` for specifications
   - output: `unsat` for proved property, `sat` for disproved property (accompanied with a counterexample), and `unknown` or `timeout` for property that cannot be proved.
   
-
 - **versatile**: support multiple types of neural types of networks and activation functions
   - layers (can be mixture of different types): `fully connected` (fc), `convolutional` (cnn), `residual networks` (resnet), `batch normalization` (bn)
   - activation functions:  `ReLU`, `sigmoid`, `tanh`, `power`
@@ -34,10 +38,6 @@
   - If NeuralSAT does not support your problem, feel free to contact us (e.g., by [openning a new Github issue](https://arxiv.org/pdf/2307.10266.pdf)). We will do our best to help.
   - We will release new, stable versions about 3-4 times a year
   
-- **fully automatic**, **ease of use** and requires very little configurations or expert knowledge
-  - NeuralSAT requires *no* parameter tuning (a huge engineering effort that researchers often don't pay attention to)!  In fact, you can just apply NeuralSAT *as is* to check your networks and desired properties.  The user *does not* have to do any configuration or tweaking.  It just works!
-    - But of course if you're an expert (or want to break the tool), you are welcome to tweak its internal settings.  
-  - This is what makes NeuralSAT different from other DNN verifiers (e.g., AB-Crown), which require lots of tuning for the tools to work properly.
 
 <details>
 
