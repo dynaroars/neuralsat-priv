@@ -6,6 +6,7 @@
 
 ## NEWS
 - [First paper](https://dynaroars.github.io/pubs/duong2024harnessing.pdf) on NeuralSAT will be at FSE'24!
+- NeuralSAT is given the "New Participation Award" at VNN-COMP'23
 - NeuralSAT is ranked 4th in the recent VNN-COMP'23 (verify neural networks competition).  This was our first participation and we look forward to next time.
   - **Note**: The current version of NeuralSAT adds significant improvements and fixed the implementation bugs we had during VNN-COMP'23 that produce unsound results (hence 4th place ranking).
 
