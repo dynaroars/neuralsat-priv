@@ -3,6 +3,7 @@ import warnings
 warnings.filterwarnings(action='ignore')
 from beartype import beartype
 import numpy as np
+import traceback
 import logging
 import typing
 import proton # type: ignore
@@ -173,10 +174,11 @@ class Verifier:
                                 return ReturnStatus.UNKNOWN
                             self.batch = self.batch // 2
                             dnf_objectives.add(objective)
-                            objective = self.get_objective(dnf_objectives)
+                            objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
-                            # raise NotImplementedError
+                            traceback.print_exc()
+                            raise NotImplementedError
                             logger.debug('[!] RuntimeError exception')
                             return None
                     except SystemExit:
@@ -318,8 +320,8 @@ class Verifier:
                     return ReturnStatus.RESTART
                 
                 # TODO: remove
-                if len(self.domains_list) > 50000:
-                    return ReturnStatus.UNKNOWN
+                # if len(self.domains_list) > 100000:
+                #     return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
     
