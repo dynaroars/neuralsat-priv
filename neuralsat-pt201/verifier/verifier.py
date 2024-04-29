@@ -170,7 +170,7 @@ class Verifier:
                                 return ReturnStatus.UNKNOWN
                             self.batch = self.batch // 2
                             dnf_objectives.add(objective)
-                            objective = self.get_objective(dnf_objectives)
+                            objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
                             # raise NotImplementedError

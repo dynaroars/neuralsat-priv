@@ -4,6 +4,8 @@ ref/
 old/
 *.lp
 *.nsys-rep
+kernel/
+*.hatchet
 
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*
