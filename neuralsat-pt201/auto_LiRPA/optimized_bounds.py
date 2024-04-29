@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from contextlib import ExitStack
 from torch import optim
+import proton # type: ignore
 import torch
 import time
 import os
@@ -366,24 +367,25 @@ def _get_optimized_bounds(
 
         with torch.no_grad() if not need_grad else ExitStack():
             # ret is lb, ub or lb, ub, A_dict (if return_A is set to true)
-            ret = self.compute_bounds(
-                x, aux, C, method=method, IBP=IBP, forward=forward,
-                bound_lower=bound_lower, bound_upper=bound_upper,
-                reuse_ibp=reuse_ibp, return_A=return_A,
-                final_node_name=final_node_name, average_A=average_A,
-                # When intermediate bounds are recomputed, we must set it
-                # to None
-                interm_bounds=interm_bounds if fix_interm_bounds else None,
-                # This is the currently tightest interval, which will be used to
-                # pass split constraints when intermediate betas are used.
-                reference_bounds=reference_bounds,
-                # This is the interval used for checking for unstable neurons.
-                aux_reference_bounds=aux_reference_bounds if sparse_intermediate_bounds else None,
-                # These are intermediate layer beta variables and their
-                # corresponding A matrices and biases.
-                intermediate_constr=intermediate_constr,
-                needed_A_dict=needed_A_dict,
-                update_mask=None)
+            with proton.scope("forward"):
+                ret = self.compute_bounds(
+                    x, aux, C, method=method, IBP=IBP, forward=forward,
+                    bound_lower=bound_lower, bound_upper=bound_upper,
+                    reuse_ibp=reuse_ibp, return_A=return_A,
+                    final_node_name=final_node_name, average_A=average_A,
+                    # When intermediate bounds are recomputed, we must set it
+                    # to None
+                    interm_bounds=interm_bounds if fix_interm_bounds else None,
+                    # This is the currently tightest interval, which will be used to
+                    # pass split constraints when intermediate betas are used.
+                    reference_bounds=reference_bounds,
+                    # This is the interval used for checking for unstable neurons.
+                    aux_reference_bounds=aux_reference_bounds if sparse_intermediate_bounds else None,
+                    # These are intermediate layer beta variables and their
+                    # corresponding A matrices and biases.
+                    intermediate_constr=intermediate_constr,
+                    needed_A_dict=needed_A_dict,
+                    update_mask=None)
         ret_l, ret_u = ret[0], ret[1]
 
         if i == 0:
@@ -551,24 +553,26 @@ def _get_optimized_bounds(
         if i != iteration - 1:
             # we do not need to update parameters in the last step since the
             # best result already obtained
-            loss.backward()
+            with proton.scope("backward"):
+                loss.backward()
 
-            # All intermediate variables are not needed at this point.
-            self._clear_and_set_new(None)
-            if opt_choice == 'adam-autolr':
-                opt.step(lr_scale=[loss_weight, loss_weight])
-            else:
-                opt.step()
-                
-            scheduler.step()
+                # All intermediate variables are not needed at this point.
+                self._clear_and_set_new(None)
+                if opt_choice == 'adam-autolr':
+                    opt.step(lr_scale=[loss_weight, loss_weight])
+                else:
+                    opt.step()
+                    
+                scheduler.step()
 
         if beta:
-            for b in betas:
-                b.data = (b >= 0) * b.data
-            for dmi in range(len(dense_coeffs_mask)):
-                # apply dense mask to the dense split coeffs matrix
-                coeffs[dmi].data = (
-                    dense_coeffs_mask[dmi].float() * coeffs[dmi].data)
+            with proton.scope("update beta"):
+                for b in betas:
+                    b.data = (b >= 0) * b.data
+                for dmi in range(len(dense_coeffs_mask)):
+                    # apply dense mask to the dense split coeffs matrix
+                    coeffs[dmi].data = (
+                        dense_coeffs_mask[dmi].float() * coeffs[dmi].data)
 
         if alpha:
             for m in optimizable_activations:

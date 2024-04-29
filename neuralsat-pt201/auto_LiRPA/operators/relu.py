@@ -205,6 +205,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
             selected_alpha = self.alpha[start_node.name]
         return selected_alpha, alpha_lookup_idx
 
+    # TODO: torch compile
     def reconstruct_full_alpha(self, sparse_alpha, full_alpha_shape, alpha_indices):
         full_alpha = torch.zeros(full_alpha_shape, dtype=sparse_alpha.dtype, device=sparse_alpha.device)
         if len(alpha_indices) == 1:
@@ -330,7 +331,8 @@ class BoundRelu(BoundTwoPieceLinear):
     def get_unstable_idx(self):
         self.alpha_indices = torch.logical_and(
             self.inputs[0].lower < 0, self.inputs[0].upper > 0).any(dim=0).nonzero(as_tuple=True)
-
+    
+    # TODO: torch compile
     def clip_alpha(self):
         for v in self.alpha.values():
             v.data = torch.clamp(v.data, self.leaky_alpha, 1.)
@@ -456,6 +458,7 @@ class BoundRelu(BoundTwoPieceLinear):
     @staticmethod
     @torch.jit.script
     # @torch.compile(mode='reduce-overhead')
+    # TODO: torch compile
     def _relu_upper_bound(lb, ub, leaky_alpha: float):
         """Upper bound slope and intercept according to CROWN relaxation."""
         lb_r = lb.clamp(max=0)
@@ -469,6 +472,7 @@ class BoundRelu(BoundTwoPieceLinear):
             upper_b = - lb_r * upper_d
         return upper_d, upper_b
 
+    # TODO: torch compile
     @staticmethod
     def _relu_mask_alpha(lower, upper, lb_lower_d : Optional[Tensor],
                          ub_lower_d : Optional[Tensor], leaky_alpha : float = 0,
@@ -478,18 +482,14 @@ class BoundRelu(BoundTwoPieceLinear):
         if leaky_alpha > 0:
             zero_coeffs = False
         else:
-            zero_coeffs = upper_mask.all()
+            zero_coeffs = upper_mask.all() 
         no_mask = (1. - lower_mask) * (1. - upper_mask.to(upper.dtype))
         if lb_lower_d is not None:
-            lb_lower_d = (
-                torch.clamp(lb_lower_d, min=leaky_alpha, max=1.) * no_mask
-                + lower_mask)
+            lb_lower_d = torch.clamp(lb_lower_d, min=leaky_alpha, max=1.) * no_mask + lower_mask
             if leaky_alpha > 0:
                 lb_lower_d += upper_mask * leaky_alpha
         if ub_lower_d is not None:
-            ub_lower_d = (
-                torch.clamp(ub_lower_d, min=leaky_alpha, max=1.) * no_mask
-                + lower_mask)
+            ub_lower_d = torch.clamp(ub_lower_d, min=leaky_alpha, max=1.) * no_mask + lower_mask
             if leaky_alpha > 0:
                 ub_lower_d += upper_mask * leaky_alpha
         return lb_lower_d, ub_lower_d, zero_coeffs

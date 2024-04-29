@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 
 try:
     import gurobipy as grb
@@ -94,13 +95,14 @@ class GlobalSettings:
     def __repr__(self):
         return (
             '\n[!] Current settings:\n'
-            f'\t- max_hidden_branches           : {int(self.max_hidden_branches)}\n'
-            f'\t- max_hidden_visited_branches   : {int(self.max_hidden_visited_branches)}\n'
+            f'\t- max_hidden_branches         : {int(self.max_hidden_branches)}\n'
+            f'\t- max_hidden_visited_branches : {int(self.max_hidden_visited_branches)}\n'
             # f'\t- max_input_branches            : {int(self.max_input_branches)}\n'
             # f'\t- max_input_visited_branches    : {int(self.max_input_visited_branches)}\n'
-            f'\t- use_attack                    : {bool(self.use_attack)}\n'
-            f'\t- use_restart                   : {bool(self.use_restart)}\n'
-            f'\t- use_stabilize                 : {bool(self.use_mip_tightening)}\n'
+            f'\t- attack                      : {bool(self.use_attack)}\n'
+            f'\t- restart                     : {bool(self.use_restart)}\n'
+            f'\t- stabilize                   : {bool(self.use_mip_tightening)}\n'
+            f'\t- assertion                   : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
             # f'\t- test                          : {bool(self.test)}\n'
             f'\n'
         )

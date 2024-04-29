@@ -219,12 +219,12 @@ class DecisionHeuristic:
         final_decision = [[] for b in range(batch)]
 
         for b in range(batch):
-            mask_item = {k: domain_params.masks[k][b].clone() for k in split_node_names}
+            mask_item = {k: domain_params.masks[k][b].clone().cpu() for k in split_node_names}
             # valid scores
             if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
                 n_name, n_id, n_point = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
                 if n_point is not None: # relu
-                    if mask_item[n_name][n_id] != 0: # unstable relu
+                    if mask_item[n_name][n_id] != 0: # unstable relu # TODO: torch compile
                         final_decision[b].append([n_name, n_id, n_point])
                         mask_item[n_name][n_id] = 0
                 else:

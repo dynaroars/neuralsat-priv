@@ -151,6 +151,7 @@ class PerturbationLpNorm(Perturbation):
             x_U = x + self.eps if self.x_U is None else self.x_U
         return x_L, x_U
 
+    # TODO: torch compile
     def concretize_matrix(self, x, A, sign):
         # If A is an identity matrix, we will handle specially.
         if not isinstance(A, eyeC):
@@ -162,11 +163,11 @@ class PerturbationLpNorm(Perturbation):
             x_L, x_U = self.get_input_bounds(x, A)
             x_ub = x_U.reshape(x_U.shape[0], -1, 1)
             x_lb = x_L.reshape(x_L.shape[0], -1, 1)
-            # Find the uppwer and lower bound similarly to IBP.
-            center = (x_ub + x_lb) / 2.0
-            diff = (x_ub - x_lb) / 2.0
+            # Find the upper and lower bound similarly to IBP.
+            center = (x_ub + x_lb) / 2.0 # TODO: torch compile
+            diff = (x_ub - x_lb) / 2.0 # TODO: torch compile
             if not isinstance(A, eyeC):
-                bound = A.matmul(center) + sign * A.abs().matmul(diff)
+                bound = A.matmul(center) + sign * A.abs().matmul(diff) # TODO: torch compile
             else:
                 # A is an identity matrix. No need to do this matmul.
                 bound = center + sign * diff

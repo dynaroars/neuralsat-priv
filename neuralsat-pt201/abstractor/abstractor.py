@@ -52,9 +52,9 @@ class NetworkAbstractor:
         if self.select_params(objective):
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
             return None
-            
+        
         # FIXME: try special settings for ViT
-        extra_opts = {'sparse_intermediate_bounds': False, 'buffers': {'no_batchdim': True},}
+        extra_opts = {'sparse_intermediate_bounds': False}
         if self.select_params(objective, extra_opts=extra_opts):
             logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
             return None
@@ -106,7 +106,7 @@ class NetworkAbstractor:
             verbose=False,
         )
         self.net.eval()
-        self.net.get_split_nodes(input_split=False)
+        self.net.get_split_nodes()
         
         # check conversion correctness
         dummy = objective.lower_bounds[0].view(1, *self.input_shape[1:]).to(self.device)
@@ -169,7 +169,7 @@ class NetworkAbstractor:
         self.init_reference_bounds = reference_bounds
         
         # get split nodes
-        self.net.get_split_nodes(input_split=False)
+        self.net.get_split_nodes()
         
         if self.method not in ['crown-optimized']:
             with torch.no_grad():
@@ -252,8 +252,8 @@ class NetworkAbstractor:
         
         # 2 * batch
         double_cs = torch.cat([domain_params.cs, domain_params.cs], dim=0)
-        double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0)
-        double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0)
+        double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers], dim=0) # TODO: torch compile
+        double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers], dim=0) # TODO: torch compile
         if os.environ.get('NEURALSAT_ASSERT'):
             assert torch.all(double_input_lowers <= double_input_uppers)
         

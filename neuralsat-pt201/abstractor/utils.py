@@ -231,8 +231,8 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_points = {k: torch.as_tensor(v).to(device=self.device, non_blocking=True) for k, v in splitting_points.items()}
     
     # 2 * batch
-    double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()}
-    double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()}
+    double_upper_bounds = {k: torch.cat([v, v], dim=0) for k, v in upper_bounds.items()} # TODO: torch compile
+    double_lower_bounds = {k: torch.cat([v, v], dim=0) for k, v in lower_bounds.items()} # TODO: torch compile
 
     # construct new hidden bounds
     new_intermediate_layer_bounds = {}

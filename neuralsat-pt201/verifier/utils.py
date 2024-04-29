@@ -220,7 +220,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
     )
     
     self.abstractor.setup(objective)
-    self.abstractor.net.get_split_nodes(input_split=False)
+    self.abstractor.net.get_split_nodes()
     
     
 @beartype

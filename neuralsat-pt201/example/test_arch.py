@@ -84,7 +84,7 @@ if __name__ == "__main__":
     rhs = objectives.rhs.transpose(0, 1).to(device)
     
     print(net(x))
-    net.get_split_nodes(input_split=False)
+    net.get_split_nodes()
     print(net.split_nodes)
     print(net.split_activations)
     print(cs.shape)

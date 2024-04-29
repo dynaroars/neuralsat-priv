@@ -87,7 +87,6 @@ class ConvertModel(nn.Module):
         debug=False,
         enable_pruning=False,
         quirks=None,
-        enable_recording=False,
     ):
         """
         Convert onnx model to pytorch.
@@ -120,7 +119,6 @@ class ConvertModel(nn.Module):
         self.enable_pruning = enable_pruning
         self.is_nhwc = False
         self.is_last_removed = {}
-        self.enable_recording = enable_recording
 
         self.input_names = get_inputs_names(onnx_model.graph)
         self.output_names = get_outputs_names(onnx_model.graph)
@@ -163,7 +161,7 @@ class ConvertModel(nn.Module):
         #         "Batchnorm layers could potentially produce false outputs."
         #     )
 
-    def forward(self, *input_list, **input_dict):
+    def forward(self, *input_list, return_interm=False, **input_dict):
         if len(input_list) > 0 and len(input_dict) > 0:
             raise ValueError(
                 "forward-pass accepts either input_list (positional args) or "
@@ -173,8 +171,8 @@ class ConvertModel(nn.Module):
             inputs = input_list
         if len(input_dict) > 0:
             inputs = [input_dict[key] for key in self.input_names]
-            
-        if self.enable_recording:
+           
+        if return_interm:
             intermediate_outputs = []
 
         if not self.experimental and inputs[0].shape[self.batch_dim] > 1:
@@ -240,9 +238,9 @@ class ConvertModel(nn.Module):
             else:
                 activations[out_op_id] = op(*in_activations)
                 # record hidden outputs
-                if self.enable_recording:
+                if return_interm:
                     if isinstance(op, nn.ReLU):
-                        intermediate_outputs.extend([_.clone() for _ in in_activations])
+                        intermediate_outputs.extend([_.detach().clone() for _ in in_activations])
                     
             # Remove activations that are no longer needed
             for in_op_id in node.input:
@@ -266,7 +264,7 @@ class ConvertModel(nn.Module):
         if len(outputs) == 1:
             outputs = outputs[0]
             
-        if self.enable_recording:
+        if return_interm:
             return outputs, intermediate_outputs
         
         return outputs

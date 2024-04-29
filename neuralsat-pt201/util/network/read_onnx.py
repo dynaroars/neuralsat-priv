@@ -9,10 +9,9 @@ import traceback
 import warnings
 import torch
 import onnx
-import gzip
+import io
 
 from util.misc.error import *
-
 
 custom_quirks = {
     'Reshape': {
@@ -34,9 +33,20 @@ custom_quirks = {
 }
 
 @beartype
+def _load_onnx(path: str | io.BytesIO):
+    # print('Loading ONNX with customized quirks:', custom_quirks)
+    # print(type(path))
+    if isinstance(path, str):
+        onnx_model = onnx.load(path)
+    else:
+        onnx_model = onnx.load_model_from_string(path.getvalue())
+    # print(onnx_model)
+    return onnx_model
+
+@beartype
 # def inference_onnx(path: str, *inputs: np.ndarray) -> list[np.ndarray]:
-def inference_onnx(path: str, *inputs: np.ndarray):
-    sess = ort.InferenceSession(onnx.load(path).SerializeToString())
+def inference_onnx(path: str | io.BytesIO, *inputs: np.ndarray):
+    sess = ort.InferenceSession(_load_onnx(path).SerializeToString())
     names = [i.name for i in sess.get_inputs()]
     return sess.run(None, dict(zip(names, inputs)))
 
@@ -53,15 +63,17 @@ def add_batch(shape: tuple) -> tuple:
         
 
 @beartype
-def _parse_onnx(path: str) -> tuple:
-    # print('Loading ONNX with customized quirks:', custom_quirks)
-    onnx_model = onnx.load(path)
+def _parse_onnx(path: str | io.BytesIO) -> tuple:
+    # load model
+    onnx_model = _load_onnx(path)
     
+    # extract shapes
     onnx_inputs = [node.name for node in onnx_model.graph.input]
     initializers = [node.name for node in onnx_model.graph.initializer]
     inputs = list(set(onnx_inputs) - set(initializers))
     inputs = [node for node in onnx_model.graph.input if node.name in inputs]
-    
+    # print(f'{inputs = }')
+    # print(f'{onnx_model.graph.input = }')
     onnx_input_dims = inputs[0].type.tensor_type.shape.dim
     onnx_output_dims = onnx_model.graph.output[0].type.tensor_type.shape.dim
     
@@ -119,10 +131,75 @@ def _parse_onnx(path: str) -> tuple:
     
     return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
 
+@beartype
+def is_activation_node(node: onnx.NodeProto):
+    # Add more activation functions to this list as needed
+    activation_functions = ["relu", "sigmoid", "tanh"]
+    return node.op_type.lower() in activation_functions
+
+@beartype
+def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
+    assert split_idx > 0
+    
+    # model 
+    model = _load_onnx(onnx_path)
+    nodes = model.graph.node
+
+    # extractor
+    extractor = onnx.utils.Extractor(model)
+    
+    # find split_idx
+    activation_count = 0
+    split_layer = None
+    for index, node in enumerate(nodes):
+        if is_activation_node(node):
+            activation_count += 1
+            
+        if activation_count == split_idx:
+            split_layer = node
+            break
+    # ensure we found the split_idx-th activation function
+    assert split_layer is not None
+
+    # in-out
+    n1_input = [_.name for _ in model.graph.input]
+    n2_output = [_.name for _ in model.graph.output]
+    
+    # prefix model: input -> split_idx
+    prefix = extractor.extract_model(n1_input, split_layer.output)
+    prefix_buffer = io.BytesIO()
+    onnx.save(prefix, prefix_buffer)
+    prefix_buffer.seek(0)
+    
+    # suffix model: split_idx -> output
+    suffix = extractor.extract_model(split_layer.output, n2_output)
+    suffix_buffer = io.BytesIO()
+    onnx.save(suffix, suffix_buffer)
+    suffix_buffer.seek(0)
+    
+    return prefix_buffer, suffix_buffer
 
 
 @beartype
-def parse_onnx(path: str) -> tuple:
+def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tuple, split_idx: int):
+    onnx_buffer = io.BytesIO()
+    pytorch_model.eval()
+    
+    # export
+    torch.onnx.export(
+        pytorch_model,
+        torch.zeros(input_shape),
+        onnx_buffer,
+        verbose=False,
+        opset_version=12, # TODO: matter?
+    )
+    onnx_buffer.seek(0)
+    
+    return decompose_onnx(onnx_buffer, split_idx)
+    
+
+@beartype
+def parse_onnx(path: str | io.BytesIO) -> tuple:
     while True:
         try:
             return _parse_onnx(path)

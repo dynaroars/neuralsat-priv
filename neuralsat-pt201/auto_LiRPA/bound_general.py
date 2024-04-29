@@ -362,6 +362,21 @@ class BoundedModule(nn.Module):
     def final_node(self):
         return self[self.final_name]
 
+    @staticmethod
+    def _is_shape_compatible(shape1, shape2):
+        """
+        Check whether two tensor shapes shape1 and shape2 are compatible:
+        1. they need to have the same number of dimensions.
+        2. for each dimension, the number of elements need to be the same,
+           or one of the shape has only 1 element.
+        """
+        if len(shape1) != len(shape2):
+            return False
+        for (s1, s2) in zip(shape1, shape2):
+            if not (s1 == s2 or s1 == 1 or s2 == 1):
+                return False
+        return True
+    
     def get_forward_value(self, node):
         """ Recursively get `forward_value` for `node` and its parent nodes"""
         if getattr(node, 'forward_value', None) is not None:
@@ -378,7 +393,25 @@ class BoundedModule(nn.Module):
         # In most cases, the batch dimension is just the first dimension
         # if the node depends on input. Otherwise if the node doesn't
         # depend on input, there is no batch dimension.
-        node.batch_dim = 0 if node.from_input else -1
+        node.batch_dim = 0 if node.from_input else node.batch_dim
+        
+        for inp in node.inputs:
+            if (node.batch_dim != -1 and inp.batch_dim == -1 and
+                    len(node.output_shape) != 1 and self._is_shape_compatible(
+                        node.output_shape, inp.output_shape)):
+                # For now, enable this for constants and buffers only, because
+                # these are the problems we found so far. Need further testing
+                # on general cases.
+                infer_batch_dim = isinstance(
+                    inp, (BoundConstant, BoundBuffers))
+                message = (f'Node {inp} with shape {inp.output_shape}'
+                           f' {"used" if infer_batch_dim else "ignored"}'
+                           f' a inferred batch dimension {inp.batch_dim}.'
+                           f' The node {node} following it has a compatible'
+                           f' shape {node.output_shape}')
+                if infer_batch_dim:
+                    inp.batch_dim = node.batch_dim
+                logger.debug(message)
         # Unperturbed node but it is not a root node.
         # Save forward_value to value. (Can be used in forward bounds.)
         if not node.from_input and len(node.inputs) > 0:

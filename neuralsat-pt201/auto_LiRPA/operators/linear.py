@@ -10,8 +10,6 @@ from ..patches import Patches, inplace_unfold
 from .solver_utils import grb
 from .clampmult import multiply_by_A_signs
 
-from kernel.matmul import triton_matmul
-
 EPS = 1e-2
 
 class BoundLinear(BoundOptimizableActivation):
@@ -172,10 +170,8 @@ class BoundLinear(BoundOptimizableActivation):
             if isinstance(last_A, torch.Tensor):
                 # Matrix mode.
                 # Just multiply this layer's weight into bound matrices, and produce biases.
-                next_A = last_A.to(weight).matmul(weight)
-                # next_A = triton_matmul(last_A, weight).clone()
-                sum_bias = (last_A.to(bias).matmul(bias)
-                    if has_bias else 0.0)
+                next_A = last_A.to(weight).matmul(weight) # TODO: torch compile
+                sum_bias = (last_A.to(bias).matmul(bias) if has_bias else 0.0) # TODO: torch compile
             elif isinstance(last_A, Patches):
                 # Patches mode. After propagating through this layer, it will become a matrix.
                 # Reshape the weight matrix as a conv image.

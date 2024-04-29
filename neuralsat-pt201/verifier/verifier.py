@@ -320,8 +320,8 @@ class Verifier:
                     return ReturnStatus.RESTART
                 
                 # TODO: remove
-                # if len(self.domains_list) > 100000:
-                #     return ReturnStatus.UNKNOWN
+                if len(self.domains_list) > 100000:
+                    return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
     
