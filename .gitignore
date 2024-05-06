@@ -6,6 +6,8 @@ old/
 *.nsys-rep
 *.hatchet
 
+neuralsat-pt201/example/scripts/
+
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*
 

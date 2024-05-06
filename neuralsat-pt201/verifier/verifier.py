@@ -1,12 +1,12 @@
 from __future__ import annotations
 import warnings
 warnings.filterwarnings(action='ignore')
+import triton.profiler as proton
 from beartype import beartype
 import numpy as np
 import traceback
 import logging
 import typing
-import proton # type: ignore
 import torch
 import time
 import copy
@@ -376,7 +376,6 @@ class Verifier:
                 topk=Settings.mip_tightening_topk, 
                 timeout=Settings.mip_tightening_timeout_per_neuron, 
                 largest=False, # stabilize near-stable neurons
-                solve_both=True, # stabilize both upper and lower bounds
             )
             Timers.toc('Tightening') if Settings.use_timer else None
             

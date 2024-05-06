@@ -229,20 +229,18 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         unstable_idx: indices for the unstable neurons, whose bounds need to be computed.
                       Either be a tuple (for patches) or a 1-D tensor.
         """
-        # Usage of output constraints requires access to bounds of the previous iteration
-        # (see _clear_and_set_new)
+
         assert hasattr(x, "lower")
         assert hasattr(x, "upper")
-        lower = x.lower
-        upper = x.upper
-        
+
         # Get element-wise CROWN linear relaxations.
-        (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d,
-            lb_upper_d, ub_upper_d, alpha_lookup_idx) = \
-            self._backward_relaxation(last_lA, last_uA, x, start_node, unstable_idx)
+        (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d, lb_upper_d, ub_upper_d, 
+            alpha_lookup_idx) = self._backward_relaxation(last_lA, last_uA, x, start_node, unstable_idx)
+        
         # save for calculate babsr score
         self.d = upper_d
         self.lA = last_lA
+        
         # Save for initialization bounds.
         self.init_d = lower_d
 
@@ -251,8 +249,8 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
             if last_A is None:
                 return None, 0
             # Obtain the new linear relaxation coefficients based on the signs in last_A.
-            _A, _bias = multiply_by_A_signs(
-                last_A, d_pos, d_neg, b_pos, b_neg, reduce_bias=reduce_bias)
+            _A, _bias = multiply_by_A_signs(last_A, d_pos, d_neg, b_pos, b_neg, reduce_bias=reduce_bias)
+            
             if isinstance(last_A, Patches):
                 # Save the patch size, which will be used in init_alpha() to determine the number of optimizable parameters.
                 A_prod = _A.patches
@@ -260,28 +258,26 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                     if last_A.unstable_idx is not None:
                         # Sparse patches, we need to construct the full patch size: (out_c, batch, out_h, out_w, c, h, w).
                         self.patch_size[start_node.name] = [
-                            last_A.output_shape[1], A_prod.size(1),
-                            last_A.output_shape[2], last_A.output_shape[3],
-                            A_prod.size(-3), A_prod.size(-2), A_prod.size(-1)]
+                            last_A.output_shape[1], 
+                            A_prod.size(1),
+                            last_A.output_shape[2], 
+                            last_A.output_shape[3],
+                            A_prod.size(-3), 
+                            A_prod.size(-2), 
+                            A_prod.size(-1)
+                        ]
                     else:
                         # Regular patches.
                         self.patch_size[start_node.name] = A_prod.size()
             return _A, _bias
 
-        ######## A problem with patches mode for cut constraint start ##########
-        # There are cases that  the node that is in the constraint but not selected by the patches for the output node
-        # trick: only count the small patches that have all the split node coeffs[ci].sum() equal to coeffs_unfolded[ci][out_h, out_w, -1].sum()
-        # we should force these beta to be 0 to disable the effect of these constraints
-        A = last_lA if last_lA is not None else last_uA
-        current_layer_shape = lower.size()[1:]
-        ######## A problem with patches mode for cut constraint end ##########
-
         # In patches mode we might need an unfold.
         # lower_d, upper_d, lower_b, upper_b: 1, batch, current_c, current_w, current_h or None
-        upper_d = maybe_unfold_patches(upper_d, last_lA if last_lA is not None else last_uA)
-        lower_d = maybe_unfold_patches(lower_d, last_lA if last_lA is not None else last_uA)
-        upper_b = maybe_unfold_patches(upper_b, last_lA if last_lA is not None else last_uA)
-        lower_b = maybe_unfold_patches(lower_b, last_lA if last_lA is not None else last_uA)  # for ReLU it is always None; keeping it here for completeness.
+        A = last_lA if last_lA is not None else last_uA
+        upper_d = maybe_unfold_patches(upper_d, A)
+        lower_d = maybe_unfold_patches(lower_d, A)
+        upper_b = maybe_unfold_patches(upper_b, A)
+        lower_b = maybe_unfold_patches(lower_b, A)  # for ReLU it is always None; keeping it here for completeness.
         # ub_lower_d and lb_lower_d might have sparse spec dimension, so they may need alpha_lookup_idx to convert to actual spec dim.
         ub_lower_d = maybe_unfold_patches(ub_lower_d, last_uA, alpha_lookup_idx=alpha_lookup_idx)
         ub_upper_d = maybe_unfold_patches(ub_upper_d, last_uA, alpha_lookup_idx=alpha_lookup_idx)
@@ -291,11 +287,20 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         lb_upper_d = maybe_unfold_patches(lb_upper_d, last_lA, alpha_lookup_idx=alpha_lookup_idx)
 
         uA, ubias = _bound_oneside(
-            last_uA, ub_upper_d if upper_d is None else upper_d,
-            ub_lower_d if lower_d is None else lower_d, upper_b, lower_b)
+            last_uA, 
+            ub_upper_d if upper_d is None else upper_d,
+            ub_lower_d if lower_d is None else lower_d, 
+            upper_b, 
+            lower_b
+        )
+        
         lA, lbias = _bound_oneside(
-            last_lA, lb_lower_d if lower_d is None else lower_d,
-            lb_upper_d if upper_d is None else upper_d, lower_b, upper_b)
+            last_lA, 
+            lb_lower_d if lower_d is None else lower_d,
+            lb_upper_d if upper_d is None else upper_d, 
+            lower_b, 
+            upper_b
+        )
 
         self.masked_beta_lower = self.masked_beta_upper = None
 
@@ -359,17 +364,14 @@ class BoundRelu(BoundTwoPieceLinear):
                 lower_k += (upper_k < 1.0).to(upper_k) * self.leaky_alpha
         elif self.relu_options == "one-lb":
             # Always use slope 1 as lower bound
-            lower_k = ((upper_k > self.leaky_alpha).to(upper_k)
-                       + (upper_k <= self.leaky_alpha).to(upper_k)
-                          * self.leaky_alpha)
+            lower_k = (upper_k > self.leaky_alpha).to(upper_k) + (upper_k <= self.leaky_alpha).to(upper_k) * self.leaky_alpha
         else:
             # adaptive
             if self.leaky_alpha == 0:
                 lower_k = (upper_k > 0.5).to(upper_k)
             else:
                 # FIXME this may not be optimal for leaky relu
-                lower_k = ((upper_k > 0.5).to(upper_k)
-                           + (upper_k <= 0.5).to(upper_k) * self.leaky_alpha)
+                lower_k = (upper_k > 0.5).to(upper_k) + (upper_k <= 0.5).to(upper_k) * self.leaky_alpha
         return lower_k
 
     def _forward_relaxation(self, x):
@@ -407,13 +409,10 @@ class BoundRelu(BoundTwoPieceLinear):
         self.mask_pos = self.mask_pos.to(x.lower)
         self.mask_both = self.mask_both.to(x.lower)
 
-        upper_k, upper_b = self._relu_upper_bound(
-            x.lower, x.upper, self.leaky_alpha)
-        w_new = (self.mask_pos.unsqueeze(1) * x.lw
-            + self.mask_both.unsqueeze(1) * upper_k.unsqueeze(1) * x.lw)
+        upper_k, upper_b = self._relu_upper_bound(x.lower, x.upper, self.leaky_alpha)
+        w_new = self.mask_pos.unsqueeze(1) * x.lw + self.mask_both.unsqueeze(1) * upper_k.unsqueeze(1) * x.lw
         upper_b = self.mask_both * upper_b / 2
-        b_new = (self.mask_pos * x.lb
-            + self.mask_both * upper_k * x.lb + upper_b)
+        b_new = self.mask_pos * x.lb + self.mask_both * upper_k * x.lb + upper_b
 
         # Create new variables for unstable ReLU
         batch_size = w_new.shape[0]
@@ -423,8 +422,7 @@ class BoundRelu(BoundTwoPieceLinear):
         tot_dim = x.tot_dim + tot_unstable
 
         if offset + w_new.shape[1] < x.tot_dim:
-            return LinearBound(
-                w_new, b_new, w_new, b_new, x_L=x.x_L, x_U=x.x_U, tot_dim=tot_dim)
+            return LinearBound(w_new, b_new, w_new, b_new, x_L=x.x_L, x_U=x.x_U, tot_dim=tot_dim)
 
         index = torch.cumsum(unstable, dim=-1).to(torch.int64)
         index = (index - (offset + w_new.shape[1] - x.tot_dim)).clamp(min=0)
@@ -441,8 +439,7 @@ class BoundRelu(BoundTwoPieceLinear):
         x_L_new = torch.cat([x.x_L, x_L_unstable], dim=-1)
         x_U_new = torch.cat([x.x_U, x_U_unstable], dim=-1)
 
-        return LinearBound(
-            w_new, b_new, w_new, b_new, x_L=x_L_new, x_U=x_U_new, tot_dim=tot_dim)
+        return LinearBound(w_new, b_new, w_new, b_new, x_L=x_L_new, x_U=x_U_new, tot_dim=tot_dim)
 
     def bound_forward(self, dim_in, x):
         self._forward_relaxation(x)

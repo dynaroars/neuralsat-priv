@@ -1,8 +1,8 @@
-import torch
-import triton
+import triton.profiler as proton
 import triton.language as tl
-import proton # type: ignore
 import argparse
+import triton
+import torch
 
 @torch.compile()
 def compiled_matmul(x, y):

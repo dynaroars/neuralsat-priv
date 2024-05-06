@@ -1,6 +1,6 @@
+import triton.profiler as proton
 import argparse
 import logging
-import proton # type: ignore
 import torch
 import time
 import os
@@ -29,8 +29,8 @@ def extract_instance(net_path, vnnlib_path):
     return model, input_shape, objectives
 
 
-# @proton.profile(name='output', context='shadow')
-@proton.profile(name='output', context='python')
+@proton.profile(name='output', context='shadow')
+# @proton.profile(name='output', context='python')
 def run(verifier, objectives):
     START_TIME = time.time()
     with proton.scope("verify"):

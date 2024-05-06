@@ -95,7 +95,7 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
 
 
 @beartype
-def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', size: int | None = None, device: str = 'cpu') -> dict:
+def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu') -> dict:
     lAs = {}
     # list_nodes = [n for n in self.net.nodes() if n.name == self.net.input_name[0]] if self.input_split else self.net.get_splittable_activations()
     list_nodes = [self.net[self.net.input_name[0]]] if self.input_split else self.net.get_splittable_activations()
@@ -219,6 +219,9 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_indices_neuron = {k: [] for k in lower_bounds}
     splitting_points = {k: [] for k in lower_bounds}
     
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert all([torch.all(lower_bounds[key] <= upper_bounds[key]) for key in lower_bounds])
+    
     for i in range(batch):
         n_name, n_id, n_point = decisions[i]
         splitting_indices_batch[n_name].append(i)
@@ -237,7 +240,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     # construct new hidden bounds
     new_intermediate_layer_bounds = {}
     for key in double_lower_bounds:
-        assert len(double_lower_bounds[key]) == len(double_upper_bounds[key]) == 2 * batch
+        assert len(double_lower_bounds[key]) == len(double_upper_bounds[key]) == 2 * batch            
         if len(splitting_indices_batch[key]):
             # set 1st half (set lower)
             double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
@@ -245,6 +248,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
             if os.environ.get('NEURALSAT_ASSERT'):
                 assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
+                
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             
     assert all([_[0].shape[0] == _[1].shape[0] == 2 * batch for _ in new_intermediate_layer_bounds.values()])

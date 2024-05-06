@@ -1,11 +1,11 @@
 import warnings
 warnings.filterwarnings(action='ignore')
 
+import triton.profiler as proton
 from beartype import beartype
 import traceback
 import logging
 import typing
-import proton # type: ignore
 import torch
 import copy
 import math
@@ -315,7 +315,7 @@ class NetworkAbstractor:
         # reorganize output
         with torch.no_grad():
             # lAs
-            double_lAs = self.get_lAs(size=len(double_input_lowers))
+            double_lAs = self.get_lAs()
             # outputs
             double_output_lbs = double_output_lbs.detach().to(device='cpu')
             # slopes
@@ -388,7 +388,7 @@ class NetworkAbstractor:
         with torch.no_grad():
             # slopes
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
-            double_lAs = self.get_lAs(size=len(new_input_lowers))
+            double_lAs = self.get_lAs()
 
         return AbstractResults(**{
             'objective_ids': double_objective_ids,

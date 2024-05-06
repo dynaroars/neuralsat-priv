@@ -1,7 +1,7 @@
 from collections import OrderedDict
+import triton.profiler as proton
 from contextlib import ExitStack
 from torch import optim
-import proton # type: ignore
 import torch
 import time
 import os

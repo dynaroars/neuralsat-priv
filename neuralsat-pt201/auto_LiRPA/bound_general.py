@@ -1358,3 +1358,5 @@ class BoundedModule(nn.Module):
 
     from .solver_module import (
         build_solver_module, _build_solver_input, _build_solver_general, _reset_solver_vars, _build_solver_refined)
+
+    from .stabilization import stabilize

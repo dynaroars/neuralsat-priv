@@ -4,6 +4,7 @@ from beartype import beartype
 import typing
 import torch
 import time
+import os
 
 if typing.TYPE_CHECKING:
     import auto_LiRPA
@@ -340,26 +341,28 @@ class DomainsList:
         
         
     @beartype
+    @torch.no_grad()
     def update_refined_bounds(self: 'DomainsList', domain_params: typing.Any) -> None:
         # updating
         for key in domain_params.lower_bounds:
             orig_shape = self.all_lower_bounds[key].size()[1:] # skip batch dim
 
-            self.all_lower_bounds[key].copy_(
-                torch.where(
-                    domain_params.lower_bounds[key].view(orig_shape) > self.all_lower_bounds[key].data, 
-                    domain_params.lower_bounds[key].view(orig_shape), 
-                    self.all_lower_bounds[key].data
-                )
+            new_lower = torch.where(
+                domain_params.lower_bounds[key].view(orig_shape) > self.all_lower_bounds[key].detach(), 
+                domain_params.lower_bounds[key].view(orig_shape), 
+                self.all_lower_bounds[key].detach()
             )
+            self.all_lower_bounds[key].copy_(new_lower.detach())
             
-            self.all_upper_bounds[key].copy_(
-                torch.where(
-                    domain_params.upper_bounds[key].view(orig_shape) < self.all_upper_bounds[key].data, 
-                    domain_params.upper_bounds[key].view(orig_shape), 
-                    self.all_upper_bounds[key].data
-                )
+            new_upper = torch.where(
+                domain_params.upper_bounds[key].view(orig_shape) < self.all_upper_bounds[key].detach(),
+                domain_params.upper_bounds[key].view(orig_shape), 
+                self.all_upper_bounds[key].detach()
             )
+            self.all_upper_bounds[key].copy_(new_upper.detach())
+            
+            if os.environ.get('NEURALSAT_ASSERT'):
+                assert torch.all(self.all_lower_bounds[key].detach() <= self.all_upper_bounds[key].detach())
 
         # checking
         self._check_consistent()
