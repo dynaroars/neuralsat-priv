@@ -31,6 +31,34 @@ from util.misc.logger import logger
 from setting import Settings
 
 
+@beartype
+def _prune_objective(self: verifier.verifier.Verifier, objective: typing.Any) -> typing.Any:
+    assert self.domains_list is not None
+    
+    all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
+    if not len(all_remaining_ids):
+        return objective
+    
+    # remaining
+    indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
+    
+    # pruning
+    objective.ids = objective.ids[indices]
+    
+    objective.lower_bounds = objective.lower_bounds[indices]
+    objective.upper_bounds = objective.upper_bounds[indices]
+    
+    objective.lower_bounds_f64 = objective.lower_bounds_f64[indices]
+    objective.upper_bounds_f64 = objective.upper_bounds_f64[indices]
+    
+    objective.cs = objective.cs[indices]
+    objective.rhs = objective.rhs[indices]
+    
+    objective.cs_f64 = objective.cs_f64[indices]
+    objective.rhs_f64 = objective.rhs_f64[indices]
+    
+    # assert torch.equal(objective.ids, all_remaining_ids)
+    return objective
 
 @beartype
 def _prune_domains(domain_params: AbstractResults, remaining_indices: torch.Tensor) -> AbstractResults:

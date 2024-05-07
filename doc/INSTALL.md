@@ -48,6 +48,12 @@ conda activate dnnv
 pip install --no-deps git+https://github.com/dlshriver/DNNV.git@d4f59a01810cf4dac99f8f5e5b9d7a350cbfa8d7#egg=dnnv
 ```
 
+- **Note**: If it fails to import `proton` from `Triton`, install the latest `Triton`
+```bash
+pip install -U --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/Triton-Nightly/pypi/simple/ triton-nightly
+```
+
+
 ## 🚀 Usage
 
 ```python

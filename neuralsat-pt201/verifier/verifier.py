@@ -58,6 +58,8 @@ class Verifier:
         self.all_conflict_clauses = {}
         self.visited = 0
         
+        # other verifier
+        self.other = copy.deepcopy(self)
         
     @beartype
     def get_objective(self: 'Verifier', dnf_objectives: 'DnfObjectives', max_domain: int):
@@ -215,36 +217,6 @@ class Verifier:
             logger.info(f'Verified: {len(objective.cs)} \t Remain: {len(dnf_objectives)}')
             
         return ReturnStatus.UNSAT  
-    
-    
-    @beartype
-    def _prune_objective(self: 'Verifier', objective: typing.Any) -> typing.Any:
-        assert self.domains_list is not None
-        
-        all_remaining_ids = torch.unique(self.domains_list.all_objective_ids.data)
-        if not len(all_remaining_ids):
-            return objective
-        
-        # remaining
-        indices = torch.tensor([idx for idx, val in enumerate(objective.ids) if val in all_remaining_ids])
-        
-        # pruning
-        objective.ids = objective.ids[indices]
-        
-        objective.lower_bounds = objective.lower_bounds[indices]
-        objective.upper_bounds = objective.upper_bounds[indices]
-        
-        objective.lower_bounds_f64 = objective.lower_bounds_f64[indices]
-        objective.upper_bounds_f64 = objective.upper_bounds_f64[indices]
-        
-        objective.cs = objective.cs[indices]
-        objective.rhs = objective.rhs[indices]
-        
-        objective.cs_f64 = objective.cs_f64[indices]
-        objective.rhs_f64 = objective.rhs_f64[indices]
-        
-        # assert torch.equal(objective.ids, all_remaining_ids)
-        return objective
                 
         
     @beartype
@@ -320,6 +292,9 @@ class Verifier:
                     return ReturnStatus.RESTART
                 
                 # TODO: remove
+                if self.iteration == 5:
+                    exit()
+                
                 if len(self.domains_list) > 100000:
                     return ReturnStatus.UNKNOWN
         
@@ -448,13 +423,15 @@ class Verifier:
     
     
     from .utils import (
-        _preprocess, _init_abstractor,
+        _preprocess, 
+        _init_abstractor,
         _check_timeout,
         _setup_restart,
         _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_tightening, _update_tightening_patience,
         compute_stability, _save_stats, get_stats,
+        _prune_objective,
         get_unsat_core,
     )
     
