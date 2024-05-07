@@ -229,7 +229,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     return objectives, refined_intermediate_bounds
 
 @beartype
-def _check_timeout(self: verifier.verifier.Verifier, timeout: float) -> bool:
+def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bool:
     return time.time() - self.start_time > timeout 
 
 
@@ -316,7 +316,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 @beartype
 def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
-                timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
+                timeout: int | float = 2.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
     return False, None
@@ -329,7 +329,7 @@ def _random_idx(total_samples: int, num_samples: int, device: str = 'cpu') -> to
 
 
 @beartype
-def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: float,
+def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: int | float,
             n_sample: int = 50, n_interval: int = 1) -> torch.Tensor | None:
     if not Settings.use_attack:
         return None

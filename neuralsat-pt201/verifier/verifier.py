@@ -78,7 +78,7 @@ class Verifier:
     
     
     @beartype
-    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: float = 3600.0, force_split: str | None = None) -> str:
+    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: int | float = 3600.0, force_split: str | None = None) -> str:
         self.start_time = time.time()
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
@@ -90,7 +90,7 @@ class Verifier:
     
     
     @beartype
-    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: float = 3600.0, force_split: str | None = None) -> str:
+    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: int | float = 3600.0, force_split: str | None = None) -> str:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -136,7 +136,7 @@ class Verifier:
         
     @beartype    
     def _verify_with_restart(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
-                             timeout: float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
+                             timeout: int | float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
         # verify
         while len(dnf_objectives):
             Timers.tic('Get objective') if Settings.use_timer else None
@@ -253,7 +253,7 @@ class Verifier:
         
         
     @beartype
-    def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: float) -> str:
+    def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float) -> str:
         with proton.scope("initialization"):
             # initialization
             Timers.tic('Initialization') if Settings.use_timer else None
@@ -291,9 +291,18 @@ class Verifier:
                 if self._check_restart(start_time=start_time, start_iteration=start_iteration):
                     return ReturnStatus.RESTART
                 
-                # TODO: remove
-                if self.iteration == 5:
-                    exit()
+                # # TODO: remove
+                # if self.iteration == 5 and hasattr(self, 'other'):
+                #     print()
+                #     print('####### Start running other verifier here #######')
+                #     self.other.refined_betas = None
+                #     self.other.start_time = time.time()
+                #     cac_ref_bounds = self.other._setup_restart(0, objective)
+                #     print(f'{cac_ref_bounds=}')
+                #     cac = self.other._verify_one(objective=objective, preconditions={}, reference_bounds={}, timeout=100)
+                #     print(f'{cac=}')
+                #     print('####### End running other verifier here #######')
+                #     print()
                 
                 if len(self.domains_list) > 100000:
                     return ReturnStatus.UNKNOWN

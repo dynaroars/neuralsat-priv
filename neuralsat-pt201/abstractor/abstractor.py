@@ -80,8 +80,6 @@ class NetworkAbstractor:
             params += [        
                 ['patches', 'backward'],
                 ['matrix', 'backward'],
-                # ['patches', 'forward'],
-                # ['matrix', 'forward'],
             ]
         
         for mode, method in params:
@@ -140,7 +138,7 @@ class NetworkAbstractor:
         except SystemExit:
             exit()
         except:
-            raise
+            # raise # NOTE: MUST COMMENT this line, only UNCOMMENT for debugging 
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
             else:
