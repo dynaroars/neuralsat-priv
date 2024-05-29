@@ -15,9 +15,9 @@
 
 ## FEATURES
 
-- **fully automatic**, **ease of use** and requires very little configurations or expert knowledge
+- **fully automatic**, **ease of use** and requires **no tuning** (i.e., no expert knowledge required)
   - NeuralSAT requires *no* parameter tuning (a huge engineering effort that researchers often don't pay attention to)!  In fact, you can just apply NeuralSAT *as is* to check your networks and desired properties.  The user *does not* have to do any configuration or tweaking.  It just works!
-    - But of course if you're an expert (or want to break the tool), you are welcome to tweak its internal settings.  
+    - But if you're an expert (or want to break the tool), you are welcome to tweak its internal settings.  
   - This is what makes NeuralSAT different from other DNN verifiers (e.g., AB-Crown), which require lots of tuning to work well.
 
 - **standard** input and output formats
