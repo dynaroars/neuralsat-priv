@@ -137,7 +137,8 @@ if __name__ == '__main__':
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')
     # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
-    
+    # logger.debug(f'[!] Proof tree: {verifier.get_proof_tree()}')
+        
     if Settings.use_timer:
         Timers.toc('Main')
         Timers.print_stats()

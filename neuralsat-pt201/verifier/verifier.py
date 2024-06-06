@@ -179,8 +179,9 @@ class Verifier:
                             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
-                            traceback.print_exc()
-                            raise NotImplementedError
+                            # NOTE: MUST COMMENT these 2 lines, only UNCOMMENT for debugging 
+                            # traceback.print_exc()
+                            # raise NotImplementedError
                             logger.debug('[!] RuntimeError exception')
                             return None
                     except SystemExit:
@@ -223,7 +224,7 @@ class Verifier:
     def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
         # initialization params
         # TODO: fix init_betas found by MIP
-        ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, init_betas=self.refined_betas)
+        ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds)
 
         # check verified
         assert len(ret.output_lbs) == len(objective.cs)
@@ -262,8 +263,8 @@ class Verifier:
                 
         # cleaning
         torch.cuda.empty_cache()
-        if hasattr(self, 'tightener'):
-            self.tightener.reset()
+        if hasattr(self, 'milp_tightener'):
+            self.milp_tightener.reset()
         
         # main loop
         start_time = time.time()
@@ -290,20 +291,8 @@ class Verifier:
                 # check restart
                 if self._check_restart(start_time=start_time, start_iteration=start_iteration):
                     return ReturnStatus.RESTART
-                
-                # # TODO: remove
-                # if self.iteration == 5 and hasattr(self, 'other'):
-                #     print()
-                #     print('####### Start running other verifier here #######')
-                #     self.other.refined_betas = None
-                #     self.other.start_time = time.time()
-                #     cac_ref_bounds = self.other._setup_restart(0, objective)
-                #     print(f'{cac_ref_bounds=}')
-                #     cac = self.other._verify_one(objective=objective, preconditions={}, reference_bounds={}, timeout=100)
-                #     print(f'{cac=}')
-                #     print('####### End running other verifier here #######')
-                #     print()
-                
+            
+                # check unsolvable
                 if len(self.domains_list) > 100000:
                     return ReturnStatus.UNKNOWN
         
@@ -355,13 +344,20 @@ class Verifier:
         unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
             Timers.tic('Tightening') if Settings.use_timer else None
-            self.tightener(
+            self.milp_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.mip_tightening_topk, 
                 timeout=Settings.mip_tightening_timeout_per_neuron, 
                 largest=False, # stabilize near-stable neurons
             )
             Timers.toc('Tightening') if Settings.use_timer else None
+            
+        # if self.iteration == 5 or 1:
+        #     if hasattr(self, 'gpu_tightener'):
+        #         self.gpu_tightener(
+        #             domain_list=self.domains_list, 
+        #         )
+        #         exit()
             
         with proton.scope("pop"):
             # step 3: selection
@@ -435,12 +431,12 @@ class Verifier:
         _preprocess, 
         _init_abstractor,
         _check_timeout,
-        _setup_restart,
+        _setup_restart, _setup_restart_naive,
         _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_tightening, _update_tightening_patience,
         compute_stability, _save_stats, get_stats,
         _prune_objective,
-        get_unsat_core,
+        get_unsat_core, get_proof_tree,
     )
     

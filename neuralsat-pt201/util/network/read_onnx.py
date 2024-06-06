@@ -159,20 +159,21 @@ def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
             split_layer = node
             break
     # ensure we found the split_idx-th activation function
-    assert split_layer is not None
+    if split_layer is None:
+        return None, None
 
     # in-out
     n1_input = [_.name for _ in model.graph.input]
     n2_output = [_.name for _ in model.graph.output]
     
     # prefix model: input -> split_idx
-    prefix = extractor.extract_model(n1_input, split_layer.output)
+    prefix = extractor.extract_model(n1_input, split_layer.input)
     prefix_buffer = io.BytesIO()
     onnx.save(prefix, prefix_buffer)
     prefix_buffer.seek(0)
     
     # suffix model: split_idx -> output
-    suffix = extractor.extract_model(split_layer.output, n2_output)
+    suffix = extractor.extract_model(split_layer.input, n2_output)
     suffix_buffer = io.BytesIO()
     onnx.save(suffix, suffix_buffer)
     suffix_buffer.seek(0)

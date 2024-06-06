@@ -4,8 +4,7 @@ import os
 
 from util.misc.logger import logger
 
-
-class Tightener:
+class MILPTightener:
     
     def __init__(self, abstractor, objectives):
         self.abstractor = abstractor
@@ -155,3 +154,5 @@ class Tightener:
         current_model.update()
         
         return current_model
+    
+

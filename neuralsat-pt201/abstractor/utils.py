@@ -240,7 +240,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     # construct new hidden bounds
     new_intermediate_layer_bounds = {}
     for key in double_lower_bounds:
-        assert len(double_lower_bounds[key]) == len(double_upper_bounds[key]) == 2 * batch            
+        assert len(double_lower_bounds[key]) == len(double_upper_bounds[key]) == 2 * batch
         if len(splitting_indices_batch[key]):
             # set 1st half (set lower)
             double_lower_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key], splitting_indices_neuron[key]] = splitting_points[key]
@@ -330,9 +330,6 @@ def build_lp_solver(self: 'abstractor.abstractor.NetworkAbstractor', model_type:
         refine=refine,
     )
     self.net.model.update()
-    self.last_c_lp = c
-    self.last_input_lower = input_lower.clone()
-    self.last_input_upper = input_upper.clone()
 
 
 @beartype

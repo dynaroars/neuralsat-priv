@@ -33,6 +33,7 @@ class GlobalSettings:
         self.mip_tightening_patience = 10
         self.mip_tightening_timeout_per_neuron = 15.0
         self.mip_tightening_topk = 64
+        self.use_gpu_tightening = 1
         
         # attack
         self.use_attack = 1
@@ -79,13 +80,14 @@ class GlobalSettings:
             self.use_mip_tightening = USE_GUROBI
         
         # FIXME: remove after debugging
+        self.use_gpu_tightening = 0
         # self.max_hidden_visited_branches = 100
         # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
         # self.use_mip_tightening = 0
         # self.max_input_visited_branches = 100000
-        # self.mip_tightening_timeout_per_neuron = 1.0
+        self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256
         # self.max_restart_runtime = 20.0
         # self.forward_dynamic = 1
@@ -97,8 +99,8 @@ class GlobalSettings:
             '\n[!] Current settings:\n'
             f'\t- max_hidden_branches         : {int(self.max_hidden_branches)}\n'
             f'\t- max_hidden_visited_branches : {int(self.max_hidden_visited_branches)}\n'
-            # f'\t- max_input_branches            : {int(self.max_input_branches)}\n'
-            # f'\t- max_input_visited_branches    : {int(self.max_input_visited_branches)}\n'
+            f'\t- max_input_branches          : {int(self.max_input_branches)}\n'
+            f'\t- max_input_visited_branches  : {int(self.max_input_visited_branches)}\n'
             f'\t- attack                      : {bool(self.use_attack)}\n'
             f'\t- restart                     : {bool(self.use_restart)}\n'
             f'\t- stabilize                   : {bool(self.use_mip_tightening)}\n'

@@ -12,6 +12,7 @@ if typing.TYPE_CHECKING:
     
 from heuristic.util import _compute_babsr_scores
 from util.misc.result import AbstractResults
+from util.misc.logger import logger
 from setting import Settings
 
 LARGE = 1e6
@@ -78,29 +79,24 @@ class DecisionHeuristic:
     def get_topk_scores(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults, 
                         topk_scores: torch.return_types.topk, topk_backup_scores: torch.return_types.topk, score_length: np.ndarray, 
                         topk: int) -> tuple[torch.Tensor, list]:
-        
+        # output placeholders
         topk_decisions = []
-        batch = len(domain_params.input_lowers)
-        topk_output_lbs = torch.empty(
-            size=(topk, batch * 2), 
-            device=domain_params.input_lowers.device, 
-            requires_grad=False,
-        )
+        topk_output_lbs = []
         
-        # hidden
+        # hidden bounds
         double_lower_bounds = {k: torch.cat([v, v]) for k, v in domain_params.lower_bounds.items()}
         double_upper_bounds = {k: torch.cat([v, v]) for k, v in domain_params.upper_bounds.items()}
         
-        # slope
+        # slopes
         double_slopes = defaultdict(dict)
         for k, v in domain_params.slopes.items():
             double_slopes[k] = {kk: torch.cat([vv, vv], dim=2) for (kk, vv) in v.items()}
         
-        # spec
+        # specs
         double_cs = torch.cat([domain_params.cs, domain_params.cs])
         double_rhs = torch.cat([domain_params.rhs, domain_params.rhs])
         
-        # input
+        # input bounds
         double_input_lowers = torch.cat([domain_params.input_lowers, domain_params.input_lowers])
         double_input_uppers = torch.cat([domain_params.input_uppers, domain_params.input_uppers])
         
@@ -110,30 +106,47 @@ class DecisionHeuristic:
         topk_scores_indices = topk_scores.indices.cpu()
         topk_backup_scores_indices = topk_backup_scores.indices.cpu()
         
+        skip = False # skip the rest of topk if neurons are selected
         for k in range(topk):
             # top-k candidates from scores
             decision_max = [] # higher is better
-            for idx in topk_scores_indices[:, k]:
+            for batch_idx, idx in enumerate(topk_scores_indices[:, k]):
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
                 layer_name = abstractor.net.split_nodes[layer_idx].name
                 layer_split_point = abstractor.net.split_activations[layer_name][0][0].get_split_point()
                 neuron_idx = idx - score_length[layer_idx]
+                
                 if layer_split_point is not None: # relu
-                    decision_max.append([layer_name, neuron_idx, layer_split_point])
+                    if domain_params.masks[layer_name][batch_idx][neuron_idx]: # unstable neuron
+                        decision_max.append([layer_name, neuron_idx, layer_split_point])
+                    else: # stable neuron
+                        # # skip the rest of topk if neurons are selected
+                        skip = True
+                        # print(f'Skip at {k=} {batch_idx=}')
+                        break
                 else: # general activation
                     raise NotImplementedError
-
+                
+            # skip the rest of topk if neurons are selected
+            if skip:
+                logger.debug(f'[!] Skip at {k=} {topk=}')
+                break
+            
             # top-k candidates from backup scores.
             decision_min = [] # lower is better
-            for idx in topk_backup_scores_indices[:, k]:
+            for batch_idx, idx in enumerate(topk_backup_scores_indices[:, k]):
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
                 layer_name = abstractor.net.split_nodes[layer_idx].name
                 layer_split_point = abstractor.net.split_activations[layer_name][0][0].get_split_point()
                 neuron_idx = idx - score_length[layer_idx]
                 if layer_split_point is not None: # relu
-                    decision_min.append([layer_name, neuron_idx, layer_split_point])
+                    if domain_params.masks[layer_name][batch_idx][neuron_idx]: # unstable neuron
+                        decision_min.append([layer_name, neuron_idx, layer_split_point])
+                    else: # stable neuron
+                        # reuse decision_max
+                        decision_min.append(decision_max[batch_idx])
                 else: # general activation
                     raise NotImplementedError
             
@@ -162,8 +175,11 @@ class DecisionHeuristic:
             invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).to(torch.get_default_dtype())  
             invalid_mask_backup_scores = (topk_backup_scores.values[:, k] >= -SMALL).to(torch.get_default_dtype())  
             invalid_mask = torch.cat([invalid_mask_scores, invalid_mask_backup_scores]).repeat(2) * LARGE
-            topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
+            # save top-k outputs
+            # topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
+            topk_output_lbs.append(self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values)
 
+        topk_output_lbs = torch.vstack(topk_output_lbs)
         return topk_output_lbs, topk_decisions
     
     

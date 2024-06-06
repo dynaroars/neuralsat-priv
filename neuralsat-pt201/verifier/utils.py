@@ -13,9 +13,11 @@ if typing.TYPE_CHECKING:
     import verifier
     
 from heuristic.restart_heuristics import get_restart_strategy, HIDDEN_SPLIT_RESTART_STRATEGIES
-from heuristic.util import compute_masks, _history_to_clause
+from heuristic.util import compute_masks, _history_to_conflict_clause
 from heuristic.decision_heuristics import DecisionHeuristic
-from heuristic.tightener import Tightener
+
+from tightener.cpu_tightener import MILPTightener
+from tightener.gpu_tightener import GPUTightener
 
 from attacker.pgd_attack.general import general_attack
 from attacker.mip_attack import MIPAttacker
@@ -219,11 +221,16 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             )
             
         if Settings.use_mip_tightening:
-            self.tightener = Tightener(
+            self.milp_tightener = MILPTightener(
                 abstractor=self.abstractor,
                 objectives=objectives,
             )
-            
+    if Settings.use_gpu_tightening:
+        self.gpu_tightener = GPUTightener(
+            verifier=self.other,
+            abstractor=self.abstractor,
+        )
+        
     logger.info(f'Remain {len(objectives)} objectives')
     # refined_intermediate_bounds = torch.load('refined.pt')
     return objectives, refined_intermediate_bounds
@@ -250,7 +257,29 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
     self.abstractor.setup(objective)
     self.abstractor.net.get_split_nodes()
     
+
+@beartype
+def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+    self.num_restart = nth_restart + 1
+    params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 5}
+    if params is None:
+        raise NotImplementedError()
+        
+    logger.info(f'Params of {nth_restart+1}-th run: {params}')
+    abstract_method = params['abstract_method']
+
+    # decision heuristic
+    assert params['input_split'] == self.input_split
+    self.decision = DecisionHeuristic(
+        input_split=params['input_split'],
+        decision_topk=params['decision_topk'],
+        decision_method=params['decision_method'],
+    )
     
+    self._init_abstractor(abstract_method, objective)
+        
+
+
 @beartype
 def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
     self.num_restart = nth_restart + 1
@@ -399,11 +428,8 @@ def _get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> dict:
 
 @beartype
 def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
-    if not Settings.use_mip_tightening:
+    if not hasattr(self, 'milp_tightener'):
         return False
-    
-    if Settings.test:
-        return True
     
     if self.input_split:
         return False
@@ -541,7 +567,21 @@ def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
     
     unsat_cores = {k: [] for k in self.all_conflict_clauses}
     for k, v in self.all_conflict_clauses.items():
-        [unsat_cores[k].append(_history_to_clause(c, self.domains_list.var_mapping)) for c in v]
-        
+        [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
     return unsat_cores
         
+        
+        
+@beartype
+def get_proof_tree(self: verifier.verifier.Verifier) -> None | dict:
+    unsat_core = self.get_unsat_core()
+    if not unsat_core:
+        return None
+    
+    proof_tree = {}
+    for obj_idx, conflict_clauses in unsat_core.items():
+        proof_tree[obj_idx] = [[-1 * lit for lit in clause] for clause in conflict_clauses]
+    
+    return proof_tree
+        
+    

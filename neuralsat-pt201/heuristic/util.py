@@ -73,7 +73,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
 
 
 @beartype
-def _history_to_clause(h: dict, name_mapping: dict) -> list:
+def _history_to_conflict_clause(h: dict, name_mapping: dict) -> list:
     clause = []
     for lname, ldata in h.items():
         assert sum(ldata[2]) == 0 # ReLU only
@@ -183,7 +183,7 @@ def init_sat_solver(self: 'heuristic.domains_list.DomainsList', objective_ids: t
                     lower_bounds: dict, upper_bounds: dict, histories: list, preconditions: dict) -> torch.Tensor:
     assert torch.equal(objective_ids, torch.unique(objective_ids))
     # initial learned conflict clauses
-    clauses_per_objective = {k: [_history_to_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
+    clauses_per_objective = {k: [_history_to_conflict_clause(c, self.var_mapping) for c in v] for k, v in preconditions.items()}
     # pprint(clauses_per_objective)
     
     # masks: 1 for active, -1 for inactive, 0 for unstable
@@ -270,4 +270,5 @@ def save_conflict_clauses(self: 'heuristic.domains_list.DomainsList', domain_par
     for i in range(len(domain_params.histories)):
         if i in remaining_index:
             continue
+        # print('Verified:', domain_params.histories[i])
         self.all_conflict_clauses[int(domain_params.objective_ids[i])].append(domain_params.histories[i])

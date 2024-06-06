@@ -3,6 +3,7 @@ benchmark
 ref/
 old/
 *.lp
+*.json
 *.nsys-rep
 *.hatchet
 

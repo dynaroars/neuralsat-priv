@@ -236,11 +236,12 @@ class ConvertModel(nn.Module):
                 for out_op_id, output in zip(node.output, op(*in_activations)):
                     activations[out_op_id] = output
             else:
-                activations[out_op_id] = op(*in_activations)
                 # record hidden outputs
                 if return_interm:
                     if isinstance(op, nn.ReLU):
-                        intermediate_outputs.extend([_.detach().clone() for _ in in_activations])
+                        intermediate_outputs.extend([_.clone().detach() for _ in in_activations])
+                # forward
+                activations[out_op_id] = op(*in_activations)
                     
             # Remove activations that are no longer needed
             for in_op_id in node.input:

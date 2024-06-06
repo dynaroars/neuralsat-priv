@@ -329,12 +329,19 @@ class DomainsList:
     def pick_out_worst_domains(self: 'DomainsList', batch: int, device: str = 'cpu') -> AbstractResults:
         indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()[:batch]
 
+        # input bounds
+        new_input_lowers = self.all_input_lowers[indices].to(device=device, non_blocking=True)
+        new_input_uppers = self.all_input_uppers[indices].to(device=device, non_blocking=True)
+
+        # hidden bounds
         new_lower_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_lower_bounds.items()}
         new_upper_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_upper_bounds.items()}
 
         self._check_consistent()
         
         return AbstractResults(**{
+            'input_lowers': new_input_lowers, 
+            'input_uppers': new_input_uppers, 
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
         })

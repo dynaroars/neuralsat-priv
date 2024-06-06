@@ -730,6 +730,7 @@ class BoundLinear(BoundOptimizableActivation):
 
         new_layer_gurobi_vars = []
 
+        assert this_layer_shape[0] == len(this_layer_weight), print(this_layer_shape, this_layer_weight.shape)
         for neuron_idx in range(this_layer_shape[0]):
             out_lb = out_lbs[neuron_idx] if out_lbs is not None else -float('inf')
             out_ub = out_ubs[neuron_idx] if out_ubs is not None else float('inf')

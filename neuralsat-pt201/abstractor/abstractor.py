@@ -107,7 +107,12 @@ class NetworkAbstractor:
         self.net.get_split_nodes()
         
         # check conversion correctness
-        dummy = objective.lower_bounds[0].view(1, *self.input_shape[1:]).to(self.device)
+        if objective:
+            dummy = objective.lower_bounds[0].view(self.input_shape).to(self.device)
+        else:
+            logger.debug(f'[_init_module] Use random dummy input for checking correctness')
+            dummy = torch.randn(self.input_shape, device=self.device) 
+            
         try:
             assert torch.allclose(self.pytorch_model(dummy), self.net(dummy), atol=1e-4, rtol=1e-5)
         except:
@@ -118,8 +123,14 @@ class NetworkAbstractor:
     @beartype
     def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
         # at least can run with batch=1
-        x_L = objective.lower_bounds[0].view(self.input_shape)
-        x_U = objective.upper_bounds[0].view(self.input_shape)
+        if objective:
+            x_L = objective.lower_bounds[0].view(self.input_shape)
+            x_U = objective.upper_bounds[0].view(self.input_shape)
+        else:
+            logger.debug(f'[_check_module] Use random dummy input for checking correctness')
+            x_L = torch.randn(self.input_shape, device=self.device) 
+            x_U = x_L + 0.1
+        
         x = self.new_input(x_L=x_L, x_U=x_U)
         
         # forward to save architectural information
@@ -138,7 +149,8 @@ class NetworkAbstractor:
         except SystemExit:
             exit()
         except:
-            # raise # NOTE: MUST COMMENT this line, only UNCOMMENT for debugging 
+            # NOTE: MUST COMMENT this line, only UNCOMMENT for debugging 
+            # raise 
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
             else:
@@ -149,7 +161,7 @@ class NetworkAbstractor:
         
 
     @beartype
-    def initialize(self: 'NetworkAbstractor', objective: typing.Any, reference_bounds: dict | None = None, init_betas: typing.Any = None) -> AbstractResults:
+    def initialize(self: 'NetworkAbstractor', objective: typing.Any, reference_bounds: dict | None = None) -> AbstractResults:
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
