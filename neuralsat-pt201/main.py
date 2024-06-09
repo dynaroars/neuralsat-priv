@@ -138,6 +138,9 @@ if __name__ == '__main__':
     logger.info(f'[!] Runtime: {runtime:.04f}')
     # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
     # logger.debug(f'[!] Proof tree: {verifier.get_proof_tree()}')
+    # with open('example/proof_tree.json', 'w') as fp:
+    #     import json
+    #     json.dump(verifier.get_proof_tree(), fp, indent=4)
         
     if Settings.use_timer:
         Timers.toc('Main')

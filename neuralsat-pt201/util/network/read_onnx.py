@@ -151,7 +151,7 @@ def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
     # find split_idx
     activation_count = 0
     split_layer = None
-    for index, node in enumerate(nodes):
+    for _, node in enumerate(nodes):
         if is_activation_node(node):
             activation_count += 1
             

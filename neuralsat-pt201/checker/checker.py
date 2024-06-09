@@ -1,8 +1,10 @@
 import gurobipy as grb
 import multiprocessing
+import random
 import torch
 import copy
 import json
+import time
 import os
 
 from example.scripts.test_function import extract_instance
@@ -11,27 +13,31 @@ from auto_LiRPA import BoundedTensor, BoundedModule
 
 MULTIPROCESS_MODEL = None
 
-def _proof_worker(candidate):
-    can_id, can_clause, can_var_mapping, can_activation_mapping = candidate
-    print(f'[{can_id=}] {can_clause = }')
-    # print(f'[{can_id=}] {can_var_mapping = }')
-    # print(f'[{can_id=}] {can_activation_mapping = }')
+ALLOWED_GUROBI_STATUS_CODES = [
+    grb.GRB.OPTIMAL, 
+    grb.GRB.INFEASIBLE, 
+    grb.GRB.USER_OBJ_LIMIT, 
+    grb.GRB.TIME_LIMIT
+]
+
+def _proof_worker_impl(candidate):
+    can_node, can_queue, can_var_mapping, can_activation_mapping, _ = candidate
+    print(f'[{len(can_queue) = }] Solving {can_node = }')
     can_model = MULTIPROCESS_MODEL.copy()
     assert can_model.ModelSense == grb.GRB.MINIMIZE
     assert can_model.Params.BestBdStop > 0
     can_model.update()
-    print(f'[{can_id=}] {id(can_model)=} {can_model=}')
     
     # add split constraints
-    for literal in can_clause:
+    for literal in can_node.history:
         assert literal != 0
         pre_relu_name, neuron_idx = can_var_mapping[abs(literal)]
         relu_name = can_activation_mapping[pre_relu_name]
-        print(f'\t- {pre_relu_name=}, {neuron_idx=}, {relu_name=}')
+        # print(f'\t- {pre_relu_name=}, {neuron_idx=}, {relu_name=}')
         
         pre_var = can_model.getVarByName(f"lay{pre_relu_name}_{neuron_idx}")
         relu_var = can_model.getVarByName(f"ReLU{relu_name}_{neuron_idx}")
-        print(f'\t- {pre_var=}, {relu_var=}')
+        # print(f'\t- {pre_var=}, {relu_var=}')
         assert relu_var is not None # var is None if originally stable shouldn't appear here
         if literal > 0:
             # active
@@ -42,18 +48,126 @@ def _proof_worker(candidate):
             relu_var.ub = 0
         # TODO: remove all other relu_var relevant constraints
     can_model.update()
-    print(f'[{can_id=}] {id(can_model)=} {can_model=}')
     can_model.optimize()
-    
-    assert can_model.status in [2, 15], print(f'[!] Error: {can_model.status=}')
-    if can_model.status == 15:
+
+    # print(f'\t- obj_var =', can_model.getObjective().getVar(0))
+    assert can_model.status in ALLOWED_GUROBI_STATUS_CODES, print(f'[!] Error: {can_model.status=}')
+    if can_model.status == grb.GRB.USER_OBJ_LIMIT: # early stop
         return 1e-5
+    if can_model.status == grb.GRB.INFEASIBLE: # infeasible
+        return float('inf')
+    if can_model.status == grb.GRB.TIME_LIMIT: # timeout
+        return can_model.ObjBound
     return can_model.objval
     
+    
+            
+def _proof_worker_node(candidate):
+    node, queue, _, _, _ = candidate
+    if not node:
+        return False
+    
+    if not len(queue):
+        return False
+    
+    max_filtered_nodes = queue.get_possible_filtered_nodes(node)
+    if not max_filtered_nodes:
+        return False
+    
+    # print(f'[+] Solving {node=}, {max_filtered_nodes=}')
+    obj_val = _proof_worker_impl(candidate)
+    # print(f'\t- {obj_val = }')
+    is_solved = obj_val > 0
+    if is_solved:
+        queue.filter(node)
+        # print(f'\t- [{id(queue)}] Remaining {len(queue)}')
+    return is_solved
+    
+
+
+def _proof_worker(candidate):
+    solved_node = None
+    if _proof_worker_node(candidate): # solved
+        node, queue, var_mapping, activation_mapping, expand_factor = candidate
+        solved_node = node
+        while True:
+            node = node // expand_factor
+            new_candidate = (node, queue, var_mapping, activation_mapping, expand_factor)
+            if not _proof_worker_node(new_candidate):
+                break
+            solved_node = node
+    return solved_node
+                
+                
+class Node:
+    
+    def __init__(self, history, name='node') -> None:
+        self.history = history
+        self.name = name
+        
+    def __len__(self):
+        return len(self.history)
+        
+    def __lt__(self, other):
+        "Compare solution spaces"
+        if len(self) < len(other):
+            return False
+        for item in other.history:
+            if item not in self.history:
+                return False
+        return True
+    
+    def __floordiv__(self, num):
+        assert num > 1
+        if not len(self.history):
+            return None
+        return Node(history=self.history[:int(len(self)/num)], name=f'{self.name}_prefix')
+    
+    def __repr__(self):
+        return f'Node({self.name}, {self.history})'
+
+
+class ProofQueue:
+    
+    def __init__(self, proofs: list) -> None:
+        histories = proofs if len(proofs) else [[]]
+        self.queue = [Node(history=h, name=f'node_{i}') for i, h in enumerate(histories)]
+        
+    def get(self, batch):
+        indices = random.sample(range(len(self)), min(len(self), batch))
+        print(f'{batch=} {len(self)=} {indices=}')
+        return [self.queue[idx] for idx in indices]
+    
+    def add(self, node: Node):
+        self.queue.append(node)
+    
+    def filter(self, node: Node):
+        "Filter out solved nodes"
+        new_queue = [n for n in self.queue if not n < node]
+        self.queue = new_queue
+    
+    def get_possible_filtered_nodes(self, node):
+        nodes = [n for n in self.queue if n < node]
+        return len(nodes)
+    
+    def __len__(self):
+        return len(self.queue)
+
+    def __repr__(self):
+        lists = []
+        if len(self) > 10:
+            lists += [str(n) for n in self.queue[:5]]
+            lists += ['...']
+            lists += [str(n) for n in self.queue[-5:]]
+        else:
+            lists += [str(n) for n in self.queue]
+        # lists += [')']
+        return '\nQueue(\n\t' + '\n\t'.join(lists) + '\n)'
+            
 
 class ProofChecker:
     
-    def __init__(self, pytorch_model, input_shape, objectives) -> None:
+    def __init__(self, pytorch_model, input_shape, objectives, verbose=False) -> None:
         self.device = 'cpu'
         self.objectives = copy.deepcopy(objectives)
         self.input_shape = input_shape
@@ -66,6 +180,7 @@ class ProofChecker:
             verbose=False,
         )
         self.abstractor.eval()
+        self.verbose = verbose
 
     
     @property
@@ -76,7 +191,6 @@ class ProofChecker:
             for layer in self.abstractor.split_nodes:
                 for nid in range(layer.lower.flatten(start_dim=1).shape[-1]):
                     self._var_mapping[count] = (layer.name, nid)
-                    # self._var_mapping[layer.name, nid] = count
                     count += 1
         return self._var_mapping
     
@@ -94,28 +208,29 @@ class ProofChecker:
         return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
     
     
-    def build_core_checker(self, objective):
+    def build_core_checker(self, objectives):
         self.abstractor._reset_solver_vars(self.abstractor.final_node())
         if hasattr(self.abstractor, 'model'): 
             del self.abstractor.model
         
         # MILP solver
         self.abstractor.model = grb.Model('NeuralSAT_proof_checker')
-        self.abstractor.model.setParam('OutputFlag', False)
+        self.abstractor.model.setParam('Threads', 1)
+        self.abstractor.model.setParam('OutputFlag', self.verbose)
         self.abstractor.model.setParam("FeasibilityTol", 1e-5)
         self.abstractor.model.setParam('BestBdStop', 1e-5) # Terminiate as long as we find a positive lower bound.
-        # self.abstractor.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
-        # self.abstractor.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
+        self.abstractor.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
+        self.abstractor.model.setParam('MIPGapAbs', 1e-2)  # Absolute gap between lower and upper objective bound 
         
         # TODO: generalize for different input ranges
-        input_lower = objective.lower_bounds.view(self.input_shape)
-        input_upper = objective.upper_bounds.view(self.input_shape)
-        c_to_use = objective.cs.to(self.device)
-        rhs_to_use = objective.rhs[0].to(self.device)
-        # print(f'{rhs_to_use = }')
-        new_x = self.new_input(input_lower, input_upper)
+        input_lower = objectives.lower_bounds[0].view(self.input_shape)
+        input_upper = objectives.upper_bounds[0].view(self.input_shape)
+        c_to_use = objectives.cs.to(self.device)
+        assert c_to_use.shape[1] == 1, print(f'Unsupported shape {c_to_use.shape=}')
+        c_to_use = c_to_use.transpose(0, 1)
 
         # compute perturbations
+        new_x = self.new_input(input_lower, input_upper)
         self.abstractor.compute_bounds(x=(new_x,), C=c_to_use)
         self.abstractor.get_split_nodes()
         self.abstractor.build_solver_module(
@@ -123,82 +238,153 @@ class ProofChecker:
             C=c_to_use,
             final_node_name=self.abstractor.final_name, 
             model_type='mip', 
+            timeout_per_neuron=10.0,
             refine=False,
         )
         self.abstractor.model.update()
-        
+    
         # setup objective
         output_vars = self.abstractor.final_node().solver_vars
+        self.objective_vars_list = [
+            (c_, var.VarName) for (c_, var) in zip(objectives.cs, output_vars)
+        ]
         # print(f'{output_vars = }')
-        # FIXME: support CNF constraints (more than one objectives)
-        assert len(output_vars) == len(rhs_to_use) == 1
-        objective_var = self.abstractor.model.getVarByName(output_vars[0].VarName) - rhs_to_use[0]
-        # print(f'{objective_var = }')
-        self.abstractor.model.setObjective(objective_var, grb.GRB.MINIMIZE)
-        self.abstractor.model.update()
+        # print(f'{self.objective_vars_list=}')
         return self.abstractor.model
         
+    def set_objective(self, model, objective):
+        new_model = model.copy()
+        c_to_use = objective.cs[0]
+        rhs_to_use = objective.rhs[0]
         
-    def prove(self, proofs):
+        objective_var_name = None
+        for (c_, v_) in self.objective_vars_list:
+            if torch.equal(c_, c_to_use):
+                objective_var_name = v_
+                break
+        assert objective_var_name is not None
+        # print(f'{c_to_use = }')
+        # print(f'{objective_var_name = }')
+        # print()
+        objective_var = new_model.getVarByName(objective_var_name) - rhs_to_use
+        new_model.setObjective(objective_var, grb.GRB.MINIMIZE)
+        new_model.update()
+        return new_model
+    
+    
+    def prove(self, proofs, batch=1, expand_factor=2.0, timeout=3600.0, timeout_per_proof=10.0):
+        start_time = time.time()
         global MULTIPROCESS_MODEL
         # print(f'{proofs = }')
         proof_objectives = copy.deepcopy(self.objectives)
+        
+        # step 1: build common model without specific objective
+        core_solver_model = self.build_core_checker(self.objectives)
+        core_solver_model.setParam('TimeLimit', timeout_per_proof)
+        core_solver_model.update()
+        
+        # step 2: prove each objective
         while len(proof_objectives):
-            # step 1: get current objective
+            # step 2.1: get current objective
             current_objective = proof_objectives.pop(1)
-            check_core = self.build_core_checker(current_objective)
+            shared_solver_model = self.set_objective(core_solver_model, current_objective)
 
-            # step 2: get current proof
+            # step 2.2: get current proof
             current_id = current_objective.ids.item()
-            current_proof_tree = proofs[current_id]
-            print(f'[{current_id=}] {current_proof_tree = }\n')
+            current_proof_queue = ProofQueue(proofs=proofs.get(current_id, []))
+            print(f'[{current_id=}] {len(current_proof_queue)=} {current_proof_queue}\n')
             
-            # step3: create workers
-            candidates = []
-            for cidx, decisions in enumerate(current_proof_tree):
-                candidates.append((cidx, decisions, self.var_mapping, self.activation_mapping))
+            # step 2.3: update shared model
+            MULTIPROCESS_MODEL = shared_solver_model
             
-            candidates = candidates[-1:] # TODO: remove
-            
-            if not len(candidates):
-                candidates.append((0, [], self.var_mapping, self.activation_mapping))
-                
-            # step 4: run workers
-            MULTIPROCESS_MODEL = check_core
-            max_worker = min(len(candidates), os.cpu_count())
-            max_worker = 1
-            with multiprocessing.Pool(max_worker) as pool:
-                results = pool.map(_proof_worker, candidates, chunksize=1)
+            # step 2.4: prove nodes
+            while len(current_proof_queue):
+                nodes = current_proof_queue.get(batch)
+                candidates = [(node, current_proof_queue, self.var_mapping, self.activation_mapping, expand_factor) for node in nodes]
+                with multiprocessing.Pool(len(candidates)) as pool:
+                    results = pool.map(_proof_worker, candidates, chunksize=1)
+                # print('Solved nodes:', results, len(current_proof_queue))
+                for solved_node in results:
+                    if solved_node is not None:
+                        current_proof_queue.filter(solved_node)
+                print(f'\t- Remaining: {len(current_proof_queue)}')
+
+            # step 2.5: delete shared model
             MULTIPROCESS_MODEL = None
-            print(results)
-            if any([_ < 0 for _ in results]):
-                return False # disproved
-            break # TODO: remove
-                
+            
+            # step 2.6: check timeout
+            if time.time() - start_time > timeout:
+                return False # did not prove
+            
         return True # proved
                 
-                
+              
+def testcase_0():
+    net_path = 'example/backup/motivation_example_159.onnx'
+    vnnlib_path = 'example/backup/motivation_example_159.vnnlib'
+    proof_trees = {3: [[-4], [-2, 4], [2, 1, 4], [2, -1, 4]], 4: []}
+    return net_path, vnnlib_path, proof_trees
+      
 def testcase_1():
     net_path = 'example/onnx/mnist-net_256x2.onnx'
     vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
-    proof_trees = json.load(open('example/proof_tree.json'))
+    proof_trees = json.load(open('example/proof_tree_1.json'))
     formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
     return net_path, vnnlib_path, formatted_proof_trees
 
-
 def testcase_2():
-    net_path = 'example/backup/motivation_example_159.onnx'
-    vnnlib_path = 'example/backup/motivation_example_159.vnnlib'
-    proof_trees = {3: [[-4], [-2, 4], [2, 1, 4], [2, -1, 4]]}
-    return net_path, vnnlib_path, proof_trees
+    net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
+    vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
+    proof_trees = json.load(open('example/proof_tree_2.json'))
+    formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
+    return net_path, vnnlib_path, formatted_proof_trees
+    
+def testcase_3():
+    net_path = 'example/onnx/mnist-net_256x4.onnx'
+    vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
+    proof_trees = json.load(open('example/proof_tree_3.json'))
+    formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
+    return net_path, vnnlib_path, formatted_proof_trees
     
     
 if __name__ == "__main__":
-    net_path, vnnlib_path, proof_trees = testcase_1()
-    pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
-    print(pytorch_model)
-    print(f'{input_shape =}')
-    proof_checker = ProofChecker(pytorch_model, input_shape, dnf_objectives) 
-    is_proved = proof_checker.prove(proof_trees)
-    print(f'{is_proved = }')
-    # print(dnf_objectives.ids)
+    if 1:
+        random.seed(0)
+        net_path, vnnlib_path, proof_trees = testcase_1()
+        pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
+        print(pytorch_model)
+        print(f'{input_shape =}')
+        tic = time.time()
+        proof_checker = ProofChecker(pytorch_model, input_shape, dnf_objectives, verbose=False) 
+        is_proved = proof_checker.prove(
+            proofs=proof_trees, 
+            batch=32, 
+            expand_factor=2.0, 
+            timeout_per_proof=15.0,
+            timeout=1000,
+        )
+        print(f'{is_proved = }, {time.time() - tic}')
+        # print(dnf_objectives.ids)
+    else:
+        node_1 = Node(name='aaaa', history=[2])
+        node_2 = Node(name='bbbb', history=[1, 2, -4])
+        
+        print(f'{node_1 < node_2 = }')
+        print(f'{node_2 < node_1 = }')
+        
+        queue = ProofQueue([[-4], [-2, 4], [2, 1, 4], [2, -1, 4]])
+        print(queue)
+        queue.add(node_1)
+        queue.add(node_2)
+        print(queue)
+        queue.filter(node_1)
+        print(queue)
+        
+        node_3 = node_2 // 2
+        print(f'{node_3 = }')
+        node_4 = node_3 // 2
+        print(f'{node_4 = }')
+        node_5 = node_4 // 2
+        print(f'{node_5 = }')
+        
+        

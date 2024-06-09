@@ -24,12 +24,13 @@ class GPUTightener:
         split_idx = 2
         self.sub_networks = {}
         while True:
-            prefix_onnx_byte, _ = decompose_pytorch(self.orig_net.cpu(), self.orig_verifier.input_shape, split_idx)
+            prefix_onnx_byte, suffix_onnx_byte = decompose_pytorch(self.orig_net.cpu(), self.orig_verifier.input_shape, split_idx)
             if prefix_onnx_byte is None:
                 return
-            # next layer
             # parse subnet
             prefix, _, output_shape, _ = parse_onnx(prefix_onnx_byte)
+            # TODO: check suffix(prefix(x)) = model(x)
+            
             # flatten output
             if len(output_shape) > 2:
                 prefix = torch.nn.Sequential(prefix, torch.nn.Flatten(1))
