@@ -69,6 +69,7 @@ class GlobalSettings:
         self.use_restart = 1
         self.use_attack = 1
         self.test = 1
+        self.use_gpu_tightening = 0
     
     def setup(self, args):
         if args is not None:

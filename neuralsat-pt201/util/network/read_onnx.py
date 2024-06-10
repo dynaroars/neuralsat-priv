@@ -184,11 +184,11 @@ def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
 @beartype
 def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tuple, split_idx: int):
     onnx_buffer = io.BytesIO()
-    pytorch_model.eval()
+    net = pytorch_model.cpu().eval()
     
     # export
     torch.onnx.export(
-        pytorch_model,
+        net,
         torch.zeros(input_shape),
         onnx_buffer,
         verbose=False,

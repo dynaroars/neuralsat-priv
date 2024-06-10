@@ -64,9 +64,9 @@ def _proof_worker_impl(candidate):
             
 def _proof_worker_node(candidate):
     node, queue, _, _, _ = candidate
-    if not node:
+    if node is None:
         return False
-    
+        
     if not len(queue):
         return False
     
@@ -91,6 +91,8 @@ def _proof_worker(candidate):
         node, queue, var_mapping, activation_mapping, expand_factor = candidate
         solved_node = node
         while True:
+            if expand_factor <= 1:
+                break
             node = node // expand_factor
             new_candidate = (node, queue, var_mapping, activation_mapping, expand_factor)
             if not _proof_worker_node(new_candidate):
@@ -118,7 +120,7 @@ class Node:
         return True
     
     def __floordiv__(self, num):
-        assert num > 1
+        assert num >= 1
         if not len(self.history):
             return None
         return Node(history=self.history[:int(len(self)/num)], name=f'{self.name}_prefix')
@@ -147,6 +149,9 @@ class ProofQueue:
         self.queue = new_queue
     
     def get_possible_filtered_nodes(self, node):
+        if not len(node.history):
+            return 1
+        print(f'{node=}')
         nodes = [n for n in self.queue if n < node]
         return len(nodes)
     
@@ -215,8 +220,8 @@ class ProofChecker:
         
         # MILP solver
         self.abstractor.model = grb.Model('NeuralSAT_proof_checker')
-        self.abstractor.model.setParam('Threads', 1)
-        self.abstractor.model.setParam('OutputFlag', self.verbose)
+        # self.abstractor.model.setParam('Threads', 1)
+        self.abstractor.model.setParam('OutputFlag', False)
         self.abstractor.model.setParam("FeasibilityTol", 1e-5)
         self.abstractor.model.setParam('BestBdStop', 1e-5) # Terminiate as long as we find a positive lower bound.
         self.abstractor.model.setParam('MIPGap', 1e-2)  # Relative gap between lower and upper objective bound 
@@ -239,7 +244,7 @@ class ProofChecker:
             final_node_name=self.abstractor.final_name, 
             model_type='mip', 
             timeout_per_neuron=10.0,
-            refine=False,
+            refine=True,
         )
         self.abstractor.model.update()
     
@@ -281,6 +286,7 @@ class ProofChecker:
         # step 1: build common model without specific objective
         core_solver_model = self.build_core_checker(self.objectives)
         core_solver_model.setParam('TimeLimit', timeout_per_proof)
+        core_solver_model.setParam('OutputFlag', self.verbose)
         core_solver_model.update()
         
         # step 2: prove each objective
@@ -308,7 +314,8 @@ class ProofChecker:
                     if solved_node is not None:
                         current_proof_queue.filter(solved_node)
                 print(f'\t- Remaining: {len(current_proof_queue)}')
-
+                # exit()
+                
             # step 2.5: delete shared model
             MULTIPROCESS_MODEL = None
             
@@ -332,12 +339,31 @@ def testcase_1():
     formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
     return net_path, vnnlib_path, formatted_proof_trees
 
+
+def testcase_1_direct():
+    net_path = 'example/onnx/mnist-net_256x2.onnx'
+    vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
+    proof_trees = json.load(open('example/proof_tree_1.json'))
+    formatted_proof_trees = {int(k): [[]] for k, v in proof_trees.items()}
+    return net_path, vnnlib_path, formatted_proof_trees
+
+
 def testcase_2():
     net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
     vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
     proof_trees = json.load(open('example/proof_tree_2.json'))
     formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
     return net_path, vnnlib_path, formatted_proof_trees
+    
+    
+
+def testcase_2_direct():
+    net_path = 'example/onnx/mnistfc-medium-net-151.onnx'
+    vnnlib_path = 'example/vnnlib/prop_2_0.03.vnnlib'
+    proof_trees = json.load(open('example/proof_tree_2.json'))
+    formatted_proof_trees = {int(k): [[]] for k, v in proof_trees.items()}
+    return net_path, vnnlib_path, formatted_proof_trees
+    
     
 def testcase_3():
     net_path = 'example/onnx/mnist-net_256x4.onnx'
@@ -346,11 +372,17 @@ def testcase_3():
     formatted_proof_trees = {int(k): v for k, v in proof_trees.items()}
     return net_path, vnnlib_path, formatted_proof_trees
     
+def testcase_3_direct():
+    net_path = 'example/onnx/mnist-net_256x4.onnx'
+    vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
+    proof_trees = json.load(open('example/proof_tree_3.json'))
+    formatted_proof_trees = {int(k): [[]] for k, v in proof_trees.items()}
+    return net_path, vnnlib_path, formatted_proof_trees
     
 if __name__ == "__main__":
     if 1:
         random.seed(0)
-        net_path, vnnlib_path, proof_trees = testcase_1()
+        net_path, vnnlib_path, proof_trees = testcase_3()
         pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
         print(pytorch_model)
         print(f'{input_shape =}')
@@ -359,8 +391,8 @@ if __name__ == "__main__":
         is_proved = proof_checker.prove(
             proofs=proof_trees, 
             batch=32, 
-            expand_factor=2.0, 
-            timeout_per_proof=15.0,
+            expand_factor=1.0, 
+            timeout_per_proof=1000.0,
             timeout=1000,
         )
         print(f'{is_proved = }, {time.time() - tic}')

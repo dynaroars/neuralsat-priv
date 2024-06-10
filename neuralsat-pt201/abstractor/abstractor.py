@@ -25,7 +25,8 @@ class NetworkAbstractor:
     "Over-approximation method alpha-beta-CROWN"
 
     @beartype
-    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel, input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
+    def __init__(self: 'NetworkAbstractor', pytorch_model: ConvertModel | torch.nn.Module, 
+                 input_shape: tuple, method: str, input_split: bool = False, device: str = 'cpu') -> None:
 
         self.pytorch_model = copy.deepcopy(pytorch_model)
         self.device = device

@@ -11,7 +11,7 @@ class GPUTightener:
     
     def __init__(self, verifier, abstractor):
         self.orig_verifier = copy.deepcopy(verifier)
-        self.orig_net = copy.deepcopy(verifier.net)
+        self.orig_net = copy.deepcopy(verifier.net).to(verifier.device)
 
         self.pre_activations = {i: layer.inputs[0].name for (i, layer) in enumerate(abstractor.net.perturbed_optimizable_activations)}
         self.input_shape = verifier.input_shape
@@ -24,18 +24,17 @@ class GPUTightener:
         split_idx = 2
         self.sub_networks = {}
         while True:
-            prefix_onnx_byte, suffix_onnx_byte = decompose_pytorch(self.orig_net.cpu(), self.orig_verifier.input_shape, split_idx)
+            prefix_onnx_byte, _ = decompose_pytorch(self.orig_net, self.orig_verifier.input_shape, split_idx)
             if prefix_onnx_byte is None:
                 return
             # parse subnet
             prefix, _, output_shape, _ = parse_onnx(prefix_onnx_byte)
-            # TODO: check suffix(prefix(x)) = model(x)
             
             # flatten output
             if len(output_shape) > 2:
                 prefix = torch.nn.Sequential(prefix, torch.nn.Flatten(1))
                 
-            self.sub_networks[split_idx - 1] = prefix
+            self.sub_networks[split_idx - 1] = prefix.to(self.device)
             print(f'{split_idx = }')
             print(f'{prefix = }')
             print(f'{output_shape = }')
@@ -62,8 +61,10 @@ class GPUTightener:
     @torch.no_grad()
     def _sampling_random(self, layer_idx, lower_bounds, upper_bounds, n_sample=1000):
         x = (upper_bounds - lower_bounds) * torch.rand(n_sample, *self.input_shape[1:], device=self.device) + lower_bounds
-        _, outputs = self.orig_net(x, return_interm=True)
-        bounds = (outputs[layer_idx].min(0).values, outputs[layer_idx].max(0).values)
+        # print(f'{x.device=} {self.orig_net.device=}')
+        net = self.orig_net.to(self.device)
+        _, outputs = net(x, return_interm=True)
+        bounds = (outputs[layer_idx].min(0).values.flatten(), outputs[layer_idx].max(0).values.flatten())
         return bounds
     
     
@@ -128,10 +129,10 @@ class GPUTightener:
             assert torch.allclose(worst_domains.input_uppers.mean(0), worst_domains.input_uppers[0]), \
                 print(worst_domains.input_uppers.mean(0).sum(), worst_domains.input_uppers[0].sum())
                 
-        input_lower = worst_domains.input_lowers[0:1]
-        input_upper = worst_domains.input_uppers[0:1]
+        input_lower = worst_domains.input_lowers[0:1].to(self.device)
+        input_upper = worst_domains.input_uppers[0:1].to(self.device)
         
-        idx = 1
+        idx = 2
         
         # for idx, (i1, i2) in enumerate(zip(interm1, interm2)):
         print(f'Layer {idx}, {self.pre_activations[idx]}')
@@ -184,7 +185,6 @@ class GPUTightener:
             
         verify_dnf_pairs(
             verifier=self.sub_verifiers[idx],
-            model=self.sub_networks[idx],
             input_lower=input_lower,
             input_upper=input_upper,
             n_outputs=n_outputs,

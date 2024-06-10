@@ -6,10 +6,10 @@ from beartype import beartype
 import numpy as np
 import traceback
 import logging
-import typing
 import torch
 import time
 import copy
+import os
 
 from onnx2pytorch.convert.model import ConvertModel
 
@@ -179,9 +179,10 @@ class Verifier:
                             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
-                            # NOTE: MUST COMMENT these 2 lines, only UNCOMMENT for debugging 
-                            # traceback.print_exc()
-                            # raise NotImplementedError
+                            if os.environ.get("NEURALSAT_DEBUG"):
+                                # NOTE: MUST COMMENT these 2 lines, only for debugging 
+                                traceback.print_exc()
+                                raise NotImplementedError
                             logger.debug('[!] RuntimeError exception')
                             return None
                     except SystemExit:
@@ -352,7 +353,7 @@ class Verifier:
             )
             Timers.toc('Tightening') if Settings.use_timer else None
             
-        # if self.iteration == 5 or 1:
+        # if True:
         #     if hasattr(self, 'gpu_tightener'):
         #         self.gpu_tightener(
         #             domain_list=self.domains_list, 

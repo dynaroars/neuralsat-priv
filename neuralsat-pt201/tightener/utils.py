@@ -67,11 +67,14 @@ def generate_simple_specs(dnf_pairs, n_outputs):
 
 def falsify_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, eps=1e-5):
     batch_size = 10
+    device = input_lower.device
     dnf_pairs = [[(i, eps, 'lt')] for i in positive_neurons] + [[(i, -eps, 'gt')] for i in negative_neurons]
     # print(f'{positive_neurons = }')
     # print(f'{negative_neurons = }')
     all_cs, all_rhs = generate_simple_specs(dnf_pairs=dnf_pairs, n_outputs=n_outputs)
-    x_attack = (input_upper - input_lower) * torch.rand(input_lower.shape, device=input_upper.device) + input_lower
+    all_cs = all_cs.to(device)
+    all_rhs = all_rhs.to(device)
+    x_attack = (input_upper - input_lower) * torch.rand(input_lower.shape, device=device) + input_lower
     
     attack_indices = []
     for batch_idx in range(0, len(all_cs), batch_size):
@@ -152,7 +155,7 @@ def filter_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neuron
     filtered_N = [_ for _ in negative_neurons if _ not in attack_indices]
     return filtered_P, filtered_N
     
-def verify_dnf_pairs(verifier, model, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, eps=1e-5):
+def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, eps=1e-5):
     print('####### Start running other verifier here #######')
     dnf_pairs = [[(i, eps, 'lt')] for i in positive_neurons] + [[(i, -eps, 'gt')] for i in negative_neurons]
     print(f'{positive_neurons = }')
@@ -160,11 +163,12 @@ def verify_dnf_pairs(verifier, model, input_lower, input_upper, n_outputs, posit
     all_cs, all_rhs = generate_simple_specs(dnf_pairs=dnf_pairs, n_outputs=n_outputs)
     print(f'{all_cs.shape = }, {all_rhs.shape = }')
     print(f'{verifier.input_shape = }')
+    print(f'{verifier.net = }')
     
     # objective
     objectives = []
     for spec_idx in range(len(all_cs)):
-        input_bounds = torch.stack([input_lower.flatten(), input_upper.flatten()], dim=1)
+        input_bounds = torch.stack([input_lower.flatten(), input_upper.flatten()], dim=1).detach().cpu()
         objectives.append(Objective((input_bounds.numpy().tolist(), (all_cs[spec_idx].numpy(), all_rhs[spec_idx].numpy()))))
             
     dnf_objectives = DnfObjectives(
@@ -184,8 +188,8 @@ def verify_dnf_pairs(verifier, model, input_lower, input_upper, n_outputs, posit
     while len(dnf_objectives):
         count += 1
         objective = dnf_objectives.pop(1)
-        if count != 84:
-            continue
+        # if count != 84:
+        #     continue
             # torch.onnx.export(
             #     verifier.net,
             #     torch.zeros(verifier.input_shape),
