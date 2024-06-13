@@ -307,7 +307,8 @@ class ProofChecker:
             while len(current_proof_queue):
                 nodes = current_proof_queue.get(batch)
                 candidates = [(node, current_proof_queue, self.var_mapping, self.activation_mapping, expand_factor) for node in nodes]
-                with multiprocessing.Pool(len(candidates)) as pool:
+                max_worker = min(len(candidates), os.cpu_count())
+                with multiprocessing.Pool(max_worker) as pool:
                     results = pool.map(_proof_worker, candidates, chunksize=1)
                 # print('Solved nodes:', results, len(current_proof_queue))
                 for solved_node in results:
@@ -382,7 +383,7 @@ def testcase_3_direct():
 if __name__ == "__main__":
     if 1:
         random.seed(0)
-        net_path, vnnlib_path, proof_trees = testcase_3()
+        net_path, vnnlib_path, proof_trees = testcase_2()
         pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
         print(pytorch_model)
         print(f'{input_shape =}')
