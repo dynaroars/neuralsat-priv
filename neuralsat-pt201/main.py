@@ -1,16 +1,22 @@
 import argparse
 import torch
 import time
+import copy
 import os
 
-from util.misc.logger import logger, LOGGER_LEVEL
+
 from util.spec.read_vnnlib import read_vnnlib
 from util.network.read_onnx import parse_onnx
+
+from util.misc.logger import logger, LOGGER_LEVEL
 from util.misc.export import get_adv_string
+from util.misc.result import ReturnStatus
 from util.misc.timer import Timers
 
 from verifier.objective import Objective, DnfObjectives
 from verifier.verifier import Verifier 
+
+from checker.checker import ProofChecker
 
 from setting import Settings
 
@@ -50,6 +56,8 @@ if __name__ == '__main__':
                         help="disable STABILIZE heuristic.")
     parser.add_argument('--force_split', type=str, choices=['input', 'hidden'],
                         help="select SPLITTING strategy.")
+    parser.add_argument('--prove_unsat', action='store_true',
+                        help="Produce proofs of UNSAT and check.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
     args = parser.parse_args()   
@@ -105,7 +113,7 @@ if __name__ == '__main__':
         for prop_i in spec[1]:
             objectives.append(Objective((bounds, prop_i)))
             
-    objectives = DnfObjectives(
+    dnf_objectives = DnfObjectives(
         objectives=objectives, 
         input_shape=input_shape, 
         is_nhwc=is_nhwc,
@@ -116,7 +124,11 @@ if __name__ == '__main__':
     # verify
     Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
-    status = verifier.verify(objectives, timeout=timeout, force_split=args.force_split)
+    status = verifier.verify(
+        dnf_objectives=copy.deepcopy(dnf_objectives), 
+        timeout=timeout, 
+        force_split=args.force_split,
+    )
     runtime = time.time() - START_TIME
     Timers.toc('Verify') if Settings.use_timer else None
     
@@ -126,25 +138,47 @@ if __name__ == '__main__':
         logger.info(f'adv (first 5): {verifier.adv.flatten()[:5].detach().cpu()}')
         logger.debug(f'output: {verifier.net(verifier.adv).flatten().detach().cpu()}')
         
+    logger.info(f'[!] Result: {status}')
+    logger.info(f'[!] Runtime: {runtime:.04f}')
+    
+    # prove UNSAT
+    if args.prove_unsat and status == ReturnStatus.UNSAT:
+        START_PROVE_TIME = time.time()
+        prove_timeout = args.timeout - (time.time() - START_TIME)
+        # initialize proof checker
+        checker = ProofChecker(
+            net=model,
+            input_shape=input_shape,
+            dnf_objectives=copy.deepcopy(dnf_objectives),
+            verbose=False,
+        )
+        # prove
+        prove_status = checker.prove(
+            proofs=verifier.get_proof_tree(), 
+            batch=os.cpu_count() // 2, 
+            expand_factor=1.0, 
+            timeout_per_proof=prove_timeout,
+            timeout=prove_timeout,
+        )
+        # logging
+        prove_runtime = time.time() - START_PROVE_TIME
+        total_runtime = time.time() - START_TIME
+        print(f'{status},{runtime:.04f},{prove_status},{prove_runtime:.04f},{total_runtime:.04f}')
+    else:
+        print(f'{status},{runtime:.04f}')
+        
     # export
     if args.result_file:
         os.remove(args.result_file) if os.path.exists(args.result_file) else None
         with open(args.result_file, 'w') as fp:
-            print(f'{status},{runtime:.06f}', file=fp)
-            if (verifier.adv is not None) and args.export_cex:
-                print(get_adv_string(inputs=verifier.adv, net_path=args.net, is_nhwc=is_nhwc), file=fp)
+            if args.prove_unsat and status == ReturnStatus.UNSAT:
+                print(f'{status},{runtime:.06f},{prove_status},{prove_runtime:.06f},{total_runtime:.06f}', file=fp)
+            else:
+                print(f'{status},{runtime:.06f}', file=fp)
+                if (verifier.adv is not None) and args.export_cex:
+                    print(get_adv_string(inputs=verifier.adv, net_path=args.net, is_nhwc=is_nhwc), file=fp)
 
-    logger.info(f'[!] Result: {status}')
-    logger.info(f'[!] Runtime: {runtime:.04f}')
-    # logger.debug(f'[!] UNSAT core: {verifier.get_unsat_core()}')
-    # logger.debug(f'[!] Proof tree: {verifier.get_proof_tree()}')
-    # with open('example/proof_tree.json', 'w') as fp:
-    #     import json
-    #     json.dump(verifier.get_proof_tree(), fp, indent=4)
-        
     if Settings.use_timer:
         Timers.toc('Main')
         Timers.print_stats()
         
-    print(f'{status},{runtime:.04f}')
-    
