@@ -31,6 +31,7 @@ def extract_instance(net_path, vnnlib_path):
 def reset_settings():
     Settings.__init__()
     Settings.setup(args=None)
+    Settings.use_gpu_tightening = False
 
 
 class TestVerifier(unittest.TestCase):
@@ -110,7 +111,7 @@ class TestVerifier(unittest.TestCase):
         reset_settings()
         Settings.use_mip_tightening = False
         Settings.use_restart = True
-        Settings.max_hidden_visited_branches = 100
+        Settings.restart_visited_hidden_branches = 100
         
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
@@ -165,7 +166,7 @@ class TestVerifier(unittest.TestCase):
         Settings.use_mip_tightening = True
         Settings.use_restart = True
         Settings.mip_tightening_timeout_per_neuron = 2.0
-        Settings.max_hidden_visited_branches = 100
+        Settings.restart_visited_hidden_branches = 100
         
         net_path = 'example/onnx/mnist-net_256x2.onnx'
         vnnlib_path = 'example/vnnlib/prop_1_0.03.vnnlib'
@@ -425,5 +426,6 @@ class TestVerifier(unittest.TestCase):
         
 if __name__ == '__main__':
     logger.setLevel(logging.INFO)
+    print(Settings)
     unittest.main()
     

@@ -45,9 +45,9 @@ class Attacker:
                     logger.info(f"[Failed] {atk} got OOM")
                     return False, None
                 else:
-                    raise NotImplementedError
+                    raise
             except:
-                raise NotImplementedError
+                raise
             else:
                 gc_cuda()
             logger.info(f"{'[Success]' if is_attacked else '[Failed]'} {atk}")
@@ -122,9 +122,9 @@ class PGDAttacker:
                     timeout=timeout,
                 )
             else:
-                raise NotImplementedError()
+                raise
         except:
-            raise NotImplementedError()
+            raise
                 
         
         if is_attacked:

@@ -157,14 +157,16 @@ class ProofChecker:
         new_model.update()
         return new_model
     
-    def prove(self, proofs, batch=1, expand_factor=2.0, timeout=3600.0, timeout_per_proof=10.0):
+    def prove(self, proofs, batch=1, expand_factor=2.0, timeout=3600.0, timeout_per_proof=3600.0, timeout_per_neuron=15.0):
         start_time = time.time()
         global MULTIPROCESS_MODEL
         # print(f'{proofs = }')
         proof_objectives = copy.deepcopy(self.dnf_objectives)
-        
+        if proofs is None:
+            proofs = {}
+            
         # step 1: build common model without specific objective
-        core_solver_model = self.build_core_checker(self.dnf_objectives)
+        core_solver_model = self.build_core_checker(self.dnf_objectives, timeout=timeout_per_neuron)
         core_solver_model.setParam('TimeLimit', timeout_per_proof)
         core_solver_model.setParam('OutputFlag', self.verbose)
         core_solver_model.update()

@@ -266,6 +266,9 @@ class Verifier:
         torch.cuda.empty_cache()
         if hasattr(self, 'milp_tightener'):
             self.milp_tightener.reset()
+            
+        if hasattr(self, 'gpu_tightener'):
+            self.gpu_tightener.reset()
         
         # main loop
         start_time = time.time()
@@ -296,6 +299,10 @@ class Verifier:
                 # check unsolvable
                 if len(self.domains_list) > 100000:
                     return ReturnStatus.UNKNOWN
+                
+                # gpu tightening early stop
+                if self._stop_gpu_tightening():
+                    return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
     
@@ -314,13 +321,13 @@ class Verifier:
         
         # restart runtime threshold
         if self.iteration - start_iteration >= 20:
-            if time.time() - start_time > Settings.max_restart_runtime:
-                logger.debug(f'[Restart] Runtime exceeded {Settings.max_restart_runtime} seconds')
+            if time.time() - start_time > Settings.restart_max_runtime:
+                logger.debug(f'[Restart] Runtime exceeded {Settings.restart_max_runtime} seconds')
                 return True
         
         # restart domains threshold
-        max_branches = Settings.max_input_branches if self.input_split else Settings.max_hidden_branches
-        max_visited_branches = Settings.max_input_visited_branches if self.input_split else Settings.max_hidden_visited_branches
+        max_branches = Settings.restart_current_input_branches if self.input_split else Settings.restart_current_hidden_branches
+        max_visited_branches = Settings.restart_visited_input_branches if self.input_split else Settings.restart_visited_hidden_branches
         if len(self.domains_list) > max_branches:
             logger.debug(f'[Restart] Number of remaining domains exceeded {max_branches} domains')
             return True
@@ -330,6 +337,23 @@ class Verifier:
             return True
         
         return False
+    
+    @beartype
+    def _stop_gpu_tightening(self) -> bool:
+        if hasattr(self, 'other'): # main verifier:
+            return False
+        
+        if not Settings.use_gpu_tightening:
+            return False
+        
+        if len(self.domains_list) > Settings.gpu_tightening_current_hidden_branches:
+            return True
+        
+        if self.domains_list.visited > Settings.gpu_tightening_visited_hidden_branches:
+            return True
+        
+        return False
+        
             
             
     @beartype
@@ -343,7 +367,7 @@ class Verifier:
         # step 2: stabilizing
         old_domains_length = len(self.domains_list)
         unstable = self.domains_list.count_unstable_neurons()
-        if self._check_invoke_tightening(patience_limit=Settings.mip_tightening_patience):
+        if self._check_invoke_cpu_tightening(patience_limit=Settings.mip_tightening_patience):
             Timers.tic('Tightening') if Settings.use_timer else None
             self.milp_tightener(
                 domain_list=self.domains_list, 
@@ -353,12 +377,12 @@ class Verifier:
             )
             Timers.toc('Tightening') if Settings.use_timer else None
             
-        # if True:
-        #     if hasattr(self, 'gpu_tightener'):
-        #         self.gpu_tightener(
-        #             domain_list=self.domains_list, 
-        #         )
-        #         exit()
+        if self._check_invoke_gpu_tightening(patience_limit=Settings.gpu_tightening_patience):
+            # TODO:
+            self.gpu_tightener(
+                domain_list=self.domains_list, 
+            )
+            # exit()
             
         with proton.scope("pop"):
             # step 3: selection
@@ -435,7 +459,8 @@ class Verifier:
         _setup_restart, _setup_restart_naive,
         _pre_attack, _attack, _mip_attack, _check_adv_f64,
         _get_learned_conflict_clauses, _check_full_assignment,
-        _check_invoke_tightening, _update_tightening_patience,
+        _check_invoke_cpu_tightening, _update_tightening_patience,
+        _check_invoke_gpu_tightening,
         compute_stability, _save_stats, get_stats,
         _prune_objective,
         get_unsat_core, get_proof_tree,

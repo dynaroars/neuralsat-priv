@@ -427,7 +427,7 @@ def _get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> dict:
 
 
 @beartype
-def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
+def _check_invoke_cpu_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
     if not hasattr(self, 'milp_tightener'):
         return False
     
@@ -446,6 +446,16 @@ def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: i
     # reset counter
     self.tightening_patience = 0
     return True
+    
+@beartype
+def _check_invoke_gpu_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
+    if not hasattr(self, 'gpu_tightener'):
+        return False
+
+    return self.iteration < 5 or (not self.iteration % 5)
+
+    return True
+    return self.iteration == 0
     
 
 @beartype

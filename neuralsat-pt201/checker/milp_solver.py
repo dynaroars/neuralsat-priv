@@ -76,7 +76,7 @@ def _mip_solver_worker(candidate):
             vlb, status_lb = out_lb, -1
 
          
-    print(f"Solving MIP for {v.VarName:<10}: [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
+    print(f"Solving MIP for {v.VarName:<10} (timeout={model.Params.TimeLimit}): [{out_lb:.6f}, {out_ub:.6f}]=>[{vlb:.6f}, {vub:.6f}] ({status_lb}, {status_ub}), time: {time.time()-refine_time:.4f}s, #vars: {model.NumVars}, #constrs: {model.NumConstrs}")
     sys.stdout.flush()
 
     return var_name, vlb, vub, neuron_refined

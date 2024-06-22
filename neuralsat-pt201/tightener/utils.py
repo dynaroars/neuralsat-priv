@@ -1,11 +1,13 @@
 import torch
 import tqdm
 import time
+import os
 
 from attacker.pgd_attack.general import attack as pgd_attack
 from verifier.objective import Objective, DnfObjectives
 from util.misc.adam_clipping import AdamClipping
 from util.misc.check import check_solution
+from util.misc.result import ReturnStatus
 
 
 def generate_simple_specs(dnf_pairs, n_outputs):
@@ -63,20 +65,20 @@ def generate_simple_specs(dnf_pairs, n_outputs):
         return torch.stack(all_cs), torch.stack(all_rhs)
     return all_cs, all_rhs    
     
-    
 
-def falsify_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, eps=1e-5):
+def falsify_dnf_pairs(model, input_lower, input_upper, n_outputs, candidate_neurons):
+    assert len(candidate_neurons) > 0
     batch_size = 10
     device = input_lower.device
-    dnf_pairs = [[(i, eps, 'lt')] for i in positive_neurons] + [[(i, -eps, 'gt')] for i in negative_neurons]
-    # print(f'{positive_neurons = }')
-    # print(f'{negative_neurons = }')
-    all_cs, all_rhs = generate_simple_specs(dnf_pairs=dnf_pairs, n_outputs=n_outputs)
+    
+    # spec
+    all_cs, all_rhs = generate_simple_specs(dnf_pairs=candidate_neurons, n_outputs=n_outputs)
     all_cs = all_cs.to(device)
     all_rhs = all_rhs.to(device)
     x_attack = (input_upper - input_lower) * torch.rand(input_lower.shape, device=device) + input_lower
     
-    attack_indices = []
+    attack_candidates = []
+    attack_samples = []  
     for batch_idx in range(0, len(all_cs), batch_size):
         new_cs = all_cs[batch_idx:batch_idx+batch_size]
         new_rhs = all_rhs[batch_idx:batch_idx+batch_size]
@@ -92,14 +94,15 @@ def falsify_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neuro
             rhs=new_rhs,
             attack_iters=50, 
             num_restarts=20,
-            timeout=10.0,
+            timeout=5.0,
         )
         if is_attacked:
             with torch.no_grad():
                 for restart_idx in range(attack_images.shape[1]): # restarts
                     for prop_idx in range(attack_images.shape[2]): # props
-                        attack_index = dnf_pairs[batch_idx+prop_idx][0][0]
-                        if attack_index in attack_indices:
+                        attack_candidate = candidate_neurons[batch_idx+prop_idx]
+                        if attack_candidate in attack_candidates:
+                            # print('skip candidate:', attack_candidate)
                             continue
                         adv = attack_images[:, restart_idx, prop_idx]
                         if check_solution(
@@ -110,62 +113,84 @@ def falsify_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neuro
                             data_min=data_min_attack[:, prop_idx], 
                             data_max=data_max_attack[:, prop_idx]
                         ):
-                            attack_indices.append(attack_index)
-                            assert torch.all(adv >= input_lower)
-                            assert torch.all(adv <= input_upper)
-                            # print(f'\t{attack_index = }, {dnf_pairs[batch_idx+prop_idx]}, {model(adv).flatten()[attack_index]}')
-    
-    # print(f'{attack_indices = }')
-    # print()
-    # exit()
-    return attack_indices
+                            attack_candidates.append(attack_candidate)
+                            attack_samples.append(adv)
+                            if os.environ.get('NEURALSAT_ASSERT'):
+                                assert torch.all(adv >= input_lower)
+                                assert torch.all(adv <= input_upper)
+
+    return attack_candidates, attack_samples
 
 
-def filter_dnf_pairs(model, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, n_iterations=20, patient_limit=2, eps=1e-5):
-    attack_indices = []    
-    pbar = tqdm.tqdm(range(n_iterations), desc='Filtering DNF Pairs')   
+def filter_dnf_pairs(model, input_lower, input_upper, n_outputs, candidate_neurons, n_iterations=20, patient_limit=2):
+    attack_candidates = []  
+    attack_samples = []  
+    # pbar = tqdm.tqdm(range(n_iterations), desc='Filtering DNF Pairs')   
     patient = patient_limit
-    for _ in pbar:
-        new_P = [_ for _ in positive_neurons if _ not in attack_indices]
-        new_N = [_ for _ in negative_neurons if _ not in attack_indices]
-        new_indices = falsify_dnf_pairs(
+    for _ in range(n_iterations):
+        new_candidates = [_ for _ in candidate_neurons if _ not in attack_candidates]
+        if not len(new_candidates):
+            break
+        
+        new_attack_candidates, new_samples = falsify_dnf_pairs(
             model=model,
             input_lower=input_lower,
             input_upper=input_upper,
             n_outputs=n_outputs,
-            positive_neurons=new_P,
-            negative_neurons=new_N,
-            eps=eps,
+            candidate_neurons=new_candidates,
         )
-        if not len(new_indices):
+        if not len(new_attack_candidates):
             patient -= 1
-            if patient < 0:
+            if patient <= 0:
                 break
         else:
             # reset patient
             patient = patient_limit
             
-        attack_indices += new_indices
-        pbar.set_postfix(attacked=len(attack_indices), patient=patient)
+        attack_candidates += new_attack_candidates
+        attack_samples += new_samples
+        # pbar.set_postfix(attacked=len(attack_candidates), patient=patient)
     
-    attack_indices = list(sorted(set(attack_indices)))
-    print(f'{len(attack_indices)=}, {attack_indices=}')
+    # print(f'{len(attack_candidates)=}, {attack_candidates=}')
+    filtered_candidates = [_ for _ in candidate_neurons if _ not in attack_candidates]
+    return filtered_candidates, torch.vstack(attack_samples) if len(attack_samples) else []
     
-    filtered_P = [_ for _ in positive_neurons if _ not in attack_indices]
-    filtered_N = [_ for _ in negative_neurons if _ not in attack_indices]
-    return filtered_P, filtered_N
     
-def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, positive_neurons, negative_neurons, eps=1e-5):
+def extract_solved_objective(verifier, objective):
+    verified_ids, falsified_ids, unsolved_ids = [], [], []
+    attack_samples = []
+    if verifier.adv is not None:
+        output = verifier.net(verifier.adv).detach()
+        cond = torch.matmul(objective.cs, output.unsqueeze(-1)).squeeze(-1) - objective.rhs
+        falsified_ids = torch.where(cond.amax(dim=-1) < 0.0)[0].cpu().detach().numpy().tolist()
+        attack_samples.append(verifier.adv)
+        
+    if len(verifier.domains_list):
+        remaining_domains = verifier.domains_list.pick_out_worst_domains(len(verifier.domains_list), device='cpu')  
+        unsolved_objective_ids = remaining_domains.objective_ids.unique().int()
+    else:
+        unsolved_objective_ids = []
+        
+    for idx, value in enumerate(objective.ids):
+        if idx in falsified_ids:
+            continue
+        elif value in unsolved_objective_ids:
+            unsolved_ids.append(idx)
+        else:
+            verified_ids.append(idx)
+            
+    return verified_ids, falsified_ids, unsolved_ids, attack_samples
+
+
+def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_neurons, batch=10, eps=1e-5, timeout=10.0):
     print('####### Start running other verifier here #######')
-    dnf_pairs = [[(i, eps, 'lt')] for i in positive_neurons] + [[(i, -eps, 'gt')] for i in negative_neurons]
-    print(f'{positive_neurons = }')
-    print(f'{negative_neurons = }')
-    all_cs, all_rhs = generate_simple_specs(dnf_pairs=dnf_pairs, n_outputs=n_outputs)
-    print(f'{all_cs.shape = }, {all_rhs.shape = }')
-    print(f'{verifier.input_shape = }')
-    print(f'{verifier.net = }')
+    start_time = time.time()
+
+    # properties
+    # candidate_neurons = candidate_neurons[:11] # TODO: remove
+    all_cs, all_rhs = generate_simple_specs(dnf_pairs=candidate_neurons, n_outputs=n_outputs)
     
-    # objective
+    # objectives
     objectives = []
     for spec_idx in range(len(all_cs)):
         input_bounds = torch.stack([input_lower.flatten(), input_upper.flatten()], dim=1).detach().cpu()
@@ -176,58 +201,46 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, positive_neu
         input_shape=verifier.input_shape, 
         is_nhwc=False,
     )
+    # print(f'{dnf_objectives.cs.shape = }, {dnf_objectives.rhs.shape = }')
     
-    print(f'{dnf_objectives.cs.shape = }, {dnf_objectives.rhs.shape = }')
-    
-    assert torch.equal(all_cs, dnf_objectives.cs)
-    assert torch.equal(all_rhs, dnf_objectives.rhs)
+    if os.environ.get('NEURALSAT_ASSERT'):
+        assert torch.equal(all_cs, dnf_objectives.cs)
+        assert torch.equal(all_rhs, dnf_objectives.rhs)
     
     count = 0
-    verified = 0
-    start_time = time.time()
+    attack_samples = []  
+    verified_candidates, falsified_candidates, unsolved_candidates = [], [], []
     while len(dnf_objectives):
-        count += 1
-        objective = dnf_objectives.pop(1)
-        # if count != 84:
-        #     continue
-            # torch.onnx.export(
-            #     verifier.net,
-            #     torch.zeros(verifier.input_shape),
-            #     'example/onnx/prefix_error.onnx',
-            #     verbose=False,
-            #     opset_version=12,
-            # )
+        objective = dnf_objectives.pop(batch)
         # print(f'{objective.cs = }, {objective.rhs = }')
+        current_candidates = candidate_neurons[count:count+batch]
+        assert torch.equal(objective.cs.nonzero()[..., -1], torch.tensor([p[0][0] for p in current_candidates]))
         verifier.start_time = time.time()
+        count += len(objective.cs)
         try:
-            stat = verifier._verify_one(objective, preconditions={}, reference_bounds={}, timeout=10)
-            print(f'{stat=}')
+            stat = verifier._verify_one(objective, preconditions={}, reference_bounds={}, timeout=timeout)
+            print(f'{stat=}') #, objective.cs.nonzero())
         except:
-            raise
-            continue
-        else:
-            if stat == 'unsat':
-                verified += 1
-        
-        remain = len(dnf_objectives)
-        print(f'{count=}, {remain=}, {verified=}')
-        
-    print(f'{time.time() - start_time}, {verified=}')
-        
+            print(f'ERROR')
+            # raise
+        verified_ids, falsified_ids, unsolved_ids, adv = extract_solved_objective(verifier=verifier, objective=objective)
+        verified_candidates.extend([current_candidates[i][0] for i in verified_ids])
+        falsified_candidates.extend([current_candidates[i][0] for i in falsified_ids])
+        unsolved_candidates.extend([current_candidates[i][0] for i in unsolved_ids])
+        attack_samples += adv
+
+    print(f'{time.time() - start_time} {count=}')
+    print(f'verified={[p[0] for p in verified_candidates]}')
+    print(f'falsified={[p[0] for p in falsified_candidates]}')
+    print(f'unsolved={[p[0] for p in unsolved_candidates]}')
+    print()
+    print(f'verified={len(verified_candidates)}')
+    print(f'falsified={len(falsified_candidates)}')
+    print(f'unsolved={len(unsolved_candidates)}')
+    print(f'attack_samples={len(attack_samples)}')
             
-    #     exit()
-    # print()
-    # self.other.input_split = self.input_split
-    # self.other.start_time = time.time()
-    # # cac_ref_bounds = self.other._setup_restart(0, objective)
-    # # print(f'{cac_ref_bounds=}')
-    # # cac = self.other._verify_one(objective=objective, preconditions={}, reference_bounds={}, timeout=100)
-    # # print(f'{cac=}')
-    # print()
-    # print('####### End running other verifier here #######')
-    # print()
-    # print()
-        
+    print('####### End running other verifier here #######')
+    return verified_candidates, torch.vstack(attack_samples) if len(attack_samples) else []
 
 
 def optimize_dnn(net, lower, upper, n_sample=50, n_iteration=50, is_min=True):
@@ -289,3 +302,4 @@ def optimize_dnn_2(net, lower, upper, n_sample=50, n_iteration=50, is_min=True):
     if is_min:
         return Fs.min(0).values
     return Fs.max(0).values  
+

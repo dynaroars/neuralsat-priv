@@ -20,20 +20,26 @@ class GlobalSettings:
         # restart
         self.use_restart = 1
         
-        self.max_hidden_branches = 5000
-        self.max_hidden_visited_branches = 20000
+        self.restart_current_hidden_branches = 5000
+        self.restart_visited_hidden_branches = 20000
         
-        self.max_input_branches  = 100000
-        self.max_input_visited_branches = 300000
+        self.restart_current_input_branches  = 100000
+        self.restart_visited_input_branches = 300000
         
-        self.max_restart_runtime = 50.0
+        self.restart_max_runtime = 50.0
         
-        # stabilize
+        # cpu stabilize
         self.use_mip_tightening = 1
         self.mip_tightening_patience = 10
         self.mip_tightening_timeout_per_neuron = 15.0
         self.mip_tightening_topk = 64
+        
+        # gpu stabilize
         self.use_gpu_tightening = 1
+        self.gpu_tightening_current_hidden_branches = 5000
+        self.gpu_tightening_visited_hidden_branches = 20000
+        self.gpu_tightening_timeout = 50.0
+        self.gpu_tightening_patience = 10
         
         # attack
         self.use_attack = 1
@@ -63,8 +69,8 @@ class GlobalSettings:
         self.__dict__[key] = value
         
     def setup_test(self):
-        self.max_hidden_branches = 100
-        self.max_hidden_visited_branches = 200
+        self.restart_current_hidden_branches = 100
+        self.restart_visited_hidden_branches = 200
         self.use_mip_tightening = 0
         self.use_restart = 1
         self.use_attack = 1
@@ -81,16 +87,16 @@ class GlobalSettings:
             self.use_mip_tightening = USE_GUROBI
         
         # FIXME: remove after debugging
-        self.use_gpu_tightening = 0
-        # self.max_hidden_visited_branches = 100
+        self.use_gpu_tightening = 1
+        # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
         # self.use_mip_tightening = 0
-        # self.max_input_visited_branches = 100000
+        # self.restart_visited_input_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256
-        # self.max_restart_runtime = 20.0
+        # self.restart_max_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
             
@@ -98,15 +104,17 @@ class GlobalSettings:
     def __repr__(self):
         return (
             '\n[!] Current settings:\n'
-            f'\t- max_hidden_branches         : {int(self.max_hidden_branches)}\n'
-            f'\t- max_hidden_visited_branches : {int(self.max_hidden_visited_branches)}\n'
-            f'\t- max_input_branches          : {int(self.max_input_branches)}\n'
-            f'\t- max_input_visited_branches  : {int(self.max_input_visited_branches)}\n'
-            f'\t- attack                      : {bool(self.use_attack)}\n'
-            f'\t- restart                     : {bool(self.use_restart)}\n'
-            f'\t- stabilize                   : {bool(self.use_mip_tightening)}\n'
-            f'\t- assertion                   : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
-            # f'\t- test                          : {bool(self.test)}\n'
+            f'\t- restart_current_hidden_branches        : {int(self.restart_current_hidden_branches)}\n'
+            f'\t- restart_visited_hidden_branches        : {int(self.restart_visited_hidden_branches)}\n'
+            f'\t- restart_current_input_branches         : {int(self.restart_current_input_branches)}\n'
+            f'\t- restart_visited_input_branches         : {int(self.restart_visited_input_branches)}\n'
+            f'\t- gpu_tightening_current_hidden_branches : {int(self.gpu_tightening_current_hidden_branches)}\n'
+            f'\t- gpu_tightening_visited_hidden_branches : {int(self.gpu_tightening_visited_hidden_branches)}\n'
+            f'\t- attack                                 : {bool(self.use_attack)}\n'
+            f'\t- restart                                : {bool(self.use_restart)}\n'
+            f'\t- stabilize                              : {bool(self.use_mip_tightening)}\n'
+            f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
+            f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
             f'\n'
         )
 

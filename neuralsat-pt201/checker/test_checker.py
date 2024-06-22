@@ -56,20 +56,20 @@ def testcase_3_direct():
     
 if __name__ == "__main__":
     random.seed(0)
-    net_path, vnnlib_path, proof_trees = testcase_1()
+    net_path, vnnlib_path, proof_trees = testcase_0()
     pytorch_model, input_shape, dnf_objectives = extract_instance(net_path, vnnlib_path)
     print(pytorch_model)
     # print(f'{input_shape =}')
     tic = time.time()
     proof_checker = ProofChecker(pytorch_model, input_shape, dnf_objectives, verbose=False) 
-    is_proved = proof_checker.prove(
+    status = proof_checker.prove(
         proofs=proof_trees, 
         batch=64, 
         expand_factor=1.0, 
         timeout_per_proof=1000.0,
         timeout=1000,
     )
-    print(f'{is_proved = }, {time.time() - tic}')
+    print(f'{status = }, {time.time() - tic}')
     # print(dnf_objectives.ids)
     
         
