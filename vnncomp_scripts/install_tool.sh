@@ -9,6 +9,9 @@ CONDA=$CONDA_HOME/bin/conda
 NEURALSAT_CONDA_HOME=~/.conda/envs/neuralsat
 NEURALSAT_PY=$NEURALSAT_CONDA_HOME/bin/python
 
+DNNV_CONDA_HOME=~/.conda/envs/dnnv
+DNNV_PY=$DNNV_CONDA_HOME/bin/python
+
 NEURALSAT_HOME=$(dirname $(dirname $(realpath $0)))
 NEURALSAT_MAIN=$NEURALSAT_HOME/neuralsat/main.py
 
@@ -50,11 +53,16 @@ rm -rf $CONDA_HOME
 rm ./conda.sh
 
 # install env
-echo "======= Installing conda env ======="
+echo "======= Installing conda env for NEURALSAT ======="
 $CONDA env remove -p $NEURALSAT_CONDA_HOME
 rm -rf $NEURALSAT_CONDA_HOME
-$CONDA  env create -p $NEURALSAT_CONDA_HOME -f $NEURALSAT_HOME/env.yaml
+$CONDA env create -p $NEURALSAT_CONDA_HOME -f $NEURALSAT_HOME/env.yaml
 
+# install dnnv for simplifying networks
+echo "======= Installing conda env for DNNV ======="
+$CONDA env remove -p $DNNV_CONDA_HOME
+rm -rf $DNNV_CONDA_HOME
+$CONDA env create -p $DNNV_CONDA_HOME -f $NEURALSAT_HOME/neuralsat-pt201/installation/env_dnnv.yaml
 
 # setup alias
 echo "======= Exporting env variables ======="
@@ -67,10 +75,12 @@ export NEURALSAT_CONDA_HOME
 export NEURALSAT_HOME
 export NEURALSAT_PY
 export NEURALSAT_MAIN
+export DNNV_PY
 echo "export NEURALSAT_CONDA_HOME=$NEURALSAT_CONDA_HOME" >> ~/.bashrc
 echo "export NEURALSAT_HOME=$NEURALSAT_HOME" >>  ~/.bashrc
 echo "export NEURALSAT_PY=$NEURALSAT_PY" >> ~/.bashrc
 echo "export NEURALSAT_MAIN=$NEURALSAT_MAIN" >> ~/.bashrc
+echo "export DNNV_PY=$DNNV_PY" >> ~/.bashrc
 
 echo "####       End of Neuralsat stuff       ####" >> ~/.bashrc
 
