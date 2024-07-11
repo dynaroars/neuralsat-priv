@@ -26,7 +26,8 @@ if [ -d $OUTPUT_DIR ]; then
 	rm -r $OUTPUT_DIR
 fi
 
-if [ "${CATEGORY,,}" == "vggnet16" ] || [ "${CATEGORY,,}" == "cgan" ]; then
-    $DNNV_PY $TOOL_DIR/neuralsat-pt201/util/network/simplify_onnx.py $ONNX_FILE $OUTPUT_DIR/model-simplified
-fi
+$DNNV_PY $TOOL_DIR/neuralsat-pt201/util/network/simplify_onnx.py $ONNX_FILE $OUTPUT_DIR/model-simplified
+# if [ "${CATEGORY,,}" == "vggnet16" ] || [ "${CATEGORY,,}" == "cgan" ]; then
+#     $DNNV_PY $TOOL_DIR/neuralsat-pt201/util/network/simplify_onnx.py $ONNX_FILE $OUTPUT_DIR/model-simplified
+# fi
 exit 0
