@@ -61,13 +61,12 @@ class DecisionHeuristic:
             )
         
         # hidden split
-        if self.decision_method != 'smart':
-            if random.uniform(0, 1) > 0.7:
-                return self.naive_hidden_branching(
-                    domain_params=domain_params, 
-                    abstractor=abstractor, 
-                    mode=random.choice(['scale', 'distance', 'polarity'])
-                )
+        if self.decision_method == 'naive':
+            return self.naive_hidden_branching(
+                domain_params=domain_params, 
+                abstractor=abstractor, 
+                mode=random.choice(['scale', 'distance', 'polarity'])
+            )
             
         return self.smart_hidden_branching(
             abstractor=abstractor, 
@@ -78,7 +77,7 @@ class DecisionHeuristic:
     @beartype
     def get_topk_scores(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults, 
                         topk_scores: torch.return_types.topk, topk_backup_scores: torch.return_types.topk, score_length: np.ndarray, 
-                        topk: int) -> tuple[torch.Tensor, list]:
+                        topk: int) -> tuple[torch.Tensor | list, list]:
         # output placeholders
         topk_decisions = []
         topk_output_lbs = []
@@ -178,8 +177,8 @@ class DecisionHeuristic:
             # save top-k outputs
             # topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values
             topk_output_lbs.append(self.decision_reduceop((k_output_lbs.view(-1) - invalid_mask).reshape(2, -1), dim=0).values)
-
-        topk_output_lbs = torch.vstack(topk_output_lbs)
+        if len(topk_output_lbs):
+            topk_output_lbs = torch.vstack(topk_output_lbs)
         return topk_output_lbs, topk_decisions
     
     
@@ -206,7 +205,6 @@ class DecisionHeuristic:
         
         # convert an index to its layer and offset
         score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
-
         # top-k candidates
         topk_scores = torch.topk(torch.cat(scores, dim=1), topk)
         topk_backup_scores = torch.topk(torch.cat(backup_scores, dim=1), topk, largest=False)  
@@ -219,37 +217,11 @@ class DecisionHeuristic:
             score_length=score_length, 
             topk=topk,
         )
-        
-        # best improvements
-        if self.decision_method != 'smart':
-            best_output_lbs_indices = np.random.random_integers(low=0, high=len(topk_output_lbs)-1, size=topk_output_lbs.shape[1])
-            topk_output_lbs_np = topk_output_lbs.detach().cpu().numpy()
-            best_output_lbs = np.array([topk_output_lbs_np[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)])
-        else:
-            best = topk_output_lbs.topk(1, 0)
-            best_output_lbs = best.values.cpu().numpy()[0]
-            best_output_lbs_indices = best.indices.cpu().numpy()[0]
-            
-        # align decisions
-        all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
         final_decision = [[] for b in range(batch)]
-
-        for b in range(batch):
-            mask_item = {k: domain_params.masks[k][b].clone().cpu() for k in split_node_names}
-            # valid scores
-            if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
-                n_name, n_id, n_point = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
-                if n_point is not None: # relu
-                    if mask_item[n_name][n_id] != 0: # unstable relu # TODO: torch compile
-                        final_decision[b].append([n_name, n_id, n_point])
-                        mask_item[n_name][n_id] = 0
-                else:
-                    assert n_point is None
-                    # TODO: general activation
-                    raise NotImplementedError
-            # invalid scores
-            if len(final_decision[b]) == 0: 
-                # use random decisions 
+        
+        if not len(topk_output_lbs):
+            for b in range(batch):
+                mask_item = {k: domain_params.masks[k][b].clone().cpu() for k in split_node_names}
                 selected = False
                 for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
                     if (len(mask_item[layer].nonzero(as_tuple=False)) != 0) or (split_node_points[layer] is None):
@@ -262,6 +234,48 @@ class DecisionHeuristic:
                         selected = True
                         break
                 assert selected
+                # print(f'[!] Using random decisions {b=}')
+        else:
+            # best improvements
+            if self.decision_method != 'smart':
+                best_output_lbs_indices = np.random.random_integers(low=0, high=len(topk_output_lbs)-1, size=topk_output_lbs.shape[1])
+                topk_output_lbs_np = topk_output_lbs.detach().cpu().numpy()
+                best_output_lbs = np.array([topk_output_lbs_np[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)])
+            else:
+                best = topk_output_lbs.topk(1, 0)
+                best_output_lbs = best.values.cpu().numpy()[0]
+                best_output_lbs_indices = best.indices.cpu().numpy()[0]
+                
+            # align decisions
+            all_topk_decisions = [topk_decisions[best_output_lbs_indices[ii]][ii] for ii in range(batch * 2)]
+            for b in range(batch):
+                mask_item = {k: domain_params.masks[k][b].clone().cpu() for k in split_node_names}
+                # valid scores
+                if max(best_output_lbs[b], best_output_lbs[b + batch]) > -LARGE:
+                    n_name, n_id, n_point = all_topk_decisions[b] if best_output_lbs[b] > best_output_lbs[b + batch] else all_topk_decisions[b + batch]
+                    if n_point is not None: # relu
+                        if mask_item[n_name][n_id] != 0: # unstable relu # TODO: torch compile
+                            final_decision[b].append([n_name, n_id, n_point])
+                            mask_item[n_name][n_id] = 0
+                    else:
+                        assert n_point is None
+                        # TODO: general activation
+                        raise NotImplementedError
+                # invalid scores
+                if len(final_decision[b]) == 0: 
+                    # use random decisions 
+                    selected = False
+                    for layer in np.random.choice(split_node_names, len(split_node_names), replace=False):
+                        if (len(mask_item[layer].nonzero(as_tuple=False)) != 0) or (split_node_points[layer] is None):
+                            if split_node_points[layer] is not None: # relu
+                                final_decision[b].append([layer, mask_item[layer].nonzero(as_tuple=False)[0].item(), split_node_points[layer]])
+                                mask_item[final_decision[b][-1][0]][final_decision[b][-1][1]] = 0
+                            else:
+                                # TODO: general activation
+                                raise NotImplementedError
+                            selected = True
+                            break
+                    assert selected
         
         final_decision = sum(final_decision, [])
         return final_decision

@@ -1,3 +1,4 @@
+import logging
 import torch
 import tqdm
 import time
@@ -7,7 +8,7 @@ from attacker.pgd_attack.general import attack as pgd_attack
 from verifier.objective import Objective, DnfObjectives
 from util.misc.adam_clipping import AdamClipping
 from util.misc.check import check_solution
-from util.misc.result import ReturnStatus
+from util.misc.logger import logger
 
 
 def generate_simple_specs(dnf_pairs, n_outputs):
@@ -62,7 +63,7 @@ def generate_simple_specs(dnf_pairs, n_outputs):
         
     lengths = [len(_) for _ in all_cs]
     if len(set(lengths)) == 1:
-        return torch.stack(all_cs), torch.stack(all_rhs)
+        return torch.stack(all_cs).cpu(), torch.stack(all_rhs).cpu()
     return all_cs, all_rhs    
     
 
@@ -156,8 +157,17 @@ def filter_dnf_pairs(model, input_lower, input_upper, n_outputs, candidate_neuro
     return filtered_candidates, torch.vstack(attack_samples) if len(attack_samples) else []
     
     
+def extract_worst_bound(domains, objective_id):
+    # print(f'{domains.output_lbs=}')
+    # print(f'{domains.objective_ids=}')
+    assert len(domains.output_lbs) > 0
+    indices = domains.objective_ids == objective_id
+    worst_bounds = domains.output_lbs[indices] - domains.rhs[indices]
+    assert worst_bounds.numel() > 0
+    return worst_bounds.amin().item()
+
 def extract_solved_objective(verifier, objective):
-    verified_ids, falsified_ids, unsolved_ids = [], [], []
+    verified_ids, falsified_ids, unsolved_ids_w_bounds = [], [], []
     attack_samples = []
     if verifier.adv is not None:
         output = verifier.net(verifier.adv).detach()
@@ -175,26 +185,37 @@ def extract_solved_objective(verifier, objective):
         if idx in falsified_ids:
             continue
         elif value in unsolved_objective_ids:
-            unsolved_ids.append(idx)
+            # TODO: use worst bound as tightened bound
+            worst_bound = extract_worst_bound(remaining_domains, value)
+            assert worst_bound <= 0, f'Invalid {worst_bound=}'
+            unsolved_ids_w_bounds.append((idx, worst_bound))
+            # print(idx, value, worst_bound)
         else:
             verified_ids.append(idx)
-            
-    return verified_ids, falsified_ids, unsolved_ids, attack_samples
+        
+    return verified_ids, falsified_ids, unsolved_ids_w_bounds, attack_samples
 
 
-def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_neurons, batch=10, eps=1e-5, timeout=10.0):
+def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_neurons, batch=10, timeout=10.0, reference_bounds=None):
     print('####### Start running other verifier here #######')
-    start_time = time.time()
-
+    old_log_level = logger.level
+    if not os.environ.get("NEURALSAT_LOG_SUBVERIFIER"):
+        logger.setLevel(logging.NOTSET)
+        
     # properties
-    # candidate_neurons = candidate_neurons[:11] # TODO: remove
     all_cs, all_rhs = generate_simple_specs(dnf_pairs=candidate_neurons, n_outputs=n_outputs)
     
     # objectives
     objectives = []
     for spec_idx in range(len(all_cs)):
         input_bounds = torch.stack([input_lower.flatten(), input_upper.flatten()], dim=1).detach().cpu()
-        objectives.append(Objective((input_bounds.numpy().tolist(), (all_cs[spec_idx].numpy(), all_rhs[spec_idx].numpy()))))
+        objectives.append(
+            Objective((
+                input_bounds.numpy().tolist(), 
+                (all_cs[spec_idx].numpy(), 
+                 all_rhs[spec_idx].numpy())
+            ))
+        )
             
     dnf_objectives = DnfObjectives(
         objectives=objectives, 
@@ -209,37 +230,44 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_ne
     
     count = 0
     attack_samples = []  
-    verified_candidates, falsified_candidates, unsolved_candidates = [], [], []
+    verified_candidates, falsified_candidates = [], []
+    progress_bar = tqdm.tqdm(total=len(dnf_objectives), desc=f"Verifying intermediate properties")
     while len(dnf_objectives):
         objective = dnf_objectives.pop(batch)
         # print(f'{objective.cs = }, {objective.rhs = }')
         current_candidates = candidate_neurons[count:count+batch]
+        assert len(objective.cs) == len(current_candidates), f'{len(objective.cs)=} {len(current_candidates)=}'
         assert torch.equal(objective.cs.nonzero()[..., -1], torch.tensor([p[0][0] for p in current_candidates]))
-        verifier.start_time = time.time()
-        count += len(objective.cs)
+        
+        count += len(current_candidates)
         try:
-            stat = verifier._verify_one(objective, preconditions={}, reference_bounds={}, timeout=timeout)
-            print(f'{stat=}') #, objective.cs.nonzero())
+            verifier.start_time = time.time()
+            stat = verifier._verify_one(objective, preconditions={}, reference_bounds=reference_bounds, timeout=timeout)
+            # print(f'{stat=}') #, objective.cs.nonzero())
+            progress_bar.set_postfix(status=stat)
         except:
-            print(f'ERROR')
-            # raise
-        verified_ids, falsified_ids, unsolved_ids, adv = extract_solved_objective(verifier=verifier, objective=objective)
+            if os.environ.get('NEURALSAT_DEBUG'):
+                raise
+            print(f'[!] ERROR')
+
+        # extract
+        verified_ids, falsified_ids, unsolved_ids_w_bounds, adv = extract_solved_objective(verifier=verifier, objective=objective)
         verified_candidates.extend([current_candidates[i][0] for i in verified_ids])
         falsified_candidates.extend([current_candidates[i][0] for i in falsified_ids])
-        unsolved_candidates.extend([current_candidates[i][0] for i in unsolved_ids])
+        for (unsolved_id, bound) in unsolved_ids_w_bounds:
+            unsolved_candidate = current_candidates[unsolved_id][0]
+            if unsolved_candidate[-1] == 'lt':
+                verified_candidates.append((unsolved_candidate[0], unsolved_candidate[1] + bound, unsolved_candidate[2]))
+            else:
+                verified_candidates.append((unsolved_candidate[0], unsolved_candidate[1] - bound, unsolved_candidate[2]))
         attack_samples += adv
-
-    print(f'{time.time() - start_time} {count=}')
-    print(f'verified={[p[0] for p in verified_candidates]}')
-    print(f'falsified={[p[0] for p in falsified_candidates]}')
-    print(f'unsolved={[p[0] for p in unsolved_candidates]}')
-    print()
-    print(f'verified={len(verified_candidates)}')
-    print(f'falsified={len(falsified_candidates)}')
-    print(f'unsolved={len(unsolved_candidates)}')
-    print(f'attack_samples={len(attack_samples)}')
-            
+        progress_bar.update(len(current_candidates))
+    progress_bar.close()
+    
+    print(f'Verified : total={len(verified_candidates)} indices={[p[0] for p in verified_candidates]}')
+    print(f'Falsified: total={len(falsified_candidates)} indices={[p[0] for p in falsified_candidates]}')
     print('####### End running other verifier here #######')
+    logger.setLevel(old_log_level)
     return verified_candidates, torch.vstack(attack_samples) if len(attack_samples) else []
 
 
@@ -302,4 +330,5 @@ def optimize_dnn_2(net, lower, upper, n_sample=50, n_iteration=50, is_min=True):
     if is_min:
         return Fs.min(0).values
     return Fs.max(0).values  
+
 

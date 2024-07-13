@@ -15,6 +15,7 @@ if typing.TYPE_CHECKING:
 from heuristic.restart_heuristics import get_restart_strategy, HIDDEN_SPLIT_RESTART_STRATEGIES
 from heuristic.util import compute_masks, _history_to_conflict_clause
 from heuristic.decision_heuristics import DecisionHeuristic
+from heuristic.domains_list import DomainsList
 
 from tightener.cpu_tightener import MILPTightener
 from tightener.gpu_tightener import GPUTightener
@@ -225,14 +226,22 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
                 abstractor=self.abstractor,
                 objectives=objectives,
             )
-    if Settings.use_gpu_tightening:
-        self.gpu_tightener = GPUTightener(
-            verifier=self.other,
-            abstractor=self.abstractor,
-        )
+            
+        elif Settings.use_gpu_tightening:
+            self.gpu_tightener = GPUTightener(
+                verifier=self.other,
+                abstractor=self.abstractor,
+            )
         
     logger.info(f'Remain {len(objectives)} objectives')
-    # refined_intermediate_bounds = torch.load('refined.pt')
+    ##############
+    # TODO: remove
+    # refined_intermediate_bounds = torch.load('refined.pt') # TODO: remove
+    # refined_intermediate_bounds = {
+    #     k: [v[0].to(self.device), v[1].to(self.device)] for k, v in refined_intermediate_bounds.items()
+    # }
+    # print(f"{refined_intermediate_bounds=}")
+    ##############
     return objectives, refined_intermediate_bounds
 
 @beartype
@@ -253,7 +262,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         input_split=self.input_split,
         device=self.device,
     )
-    
+
     self.abstractor.setup(objective)
     self.abstractor.net.get_split_nodes()
     
@@ -261,10 +270,20 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
 @beartype
 def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
     self.num_restart = nth_restart + 1
-    params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 5}
-    if params is None:
-        raise NotImplementedError()
-        
+    # TODO: select splitting method (input/hidden)
+    if objective is not None:
+        diff = (objective.upper_bounds - objective.lower_bounds).clone()
+        eps = diff.max().item()
+        perturbed = (diff > 0).int().sum()
+        logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
+        # if eps > 0.5:
+        #     self.input_split = True
+    
+    if self.input_split:
+        params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1}
+    else:
+        params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 5}
+
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
     abstract_method = params['abstract_method']
 
@@ -275,7 +294,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_topk=params['decision_topk'],
         decision_method=params['decision_method'],
     )
-    
+        
     self._init_abstractor(abstract_method, objective)
         
 
@@ -452,10 +471,23 @@ def _check_invoke_gpu_tightening(self: verifier.verifier.Verifier, patience_limi
     if not hasattr(self, 'gpu_tightener'):
         return False
 
-    return self.iteration < 5 or (not self.iteration % 5)
+    # DEBUG: stabilization during search is still buggy
+    return self.iteration == 0 
 
+    if self.input_split:
+        return False
+    
+    if self.tightening_patience < patience_limit:
+        return False
+    
+    if len(self.domains_list) <= self.batch:
+        return False
+    
+    if Settings.use_restart and self.num_restart < len(HIDDEN_SPLIT_RESTART_STRATEGIES):
+        return False
+    
+    self.tightening_patience = 0
     return True
-    return self.iteration == 0
     
 
 @beartype
@@ -576,8 +608,9 @@ def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
         return None
     
     unsat_cores = {k: [] for k in self.all_conflict_clauses}
-    for k, v in self.all_conflict_clauses.items():
-        [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
+    if isinstance(self.domains_list, DomainsList):
+        for k, v in self.all_conflict_clauses.items():
+            [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
     return unsat_cores
         
         

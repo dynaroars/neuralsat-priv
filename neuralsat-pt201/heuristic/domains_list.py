@@ -340,6 +340,13 @@ class DomainsList:
         new_lower_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_lower_bounds.items()}
         new_upper_bounds = {k: v[indices].to(device=device, non_blocking=True) for k, v in self.all_upper_bounds.items()}
 
+        # output
+        new_output_lowers = self.all_output_lowers[indices].to(device=device, non_blocking=True)
+        
+        # properties
+        # new_cs = self.all_cs[indices].to(device=device, non_blocking=True)
+        new_rhs = self.all_rhs[indices].to(device=device, non_blocking=True)
+        
         self._check_consistent()
         
         return AbstractResults(**{
@@ -348,6 +355,9 @@ class DomainsList:
             'input_uppers': new_input_uppers, 
             'lower_bounds': new_lower_bounds, 
             'upper_bounds': new_upper_bounds, 
+            'output_lbs': new_output_lowers,
+            # 'cs': new_cs,
+            'rhs': new_rhs,
         })
         
         

@@ -12,7 +12,8 @@ from util.misc.adam_clipping import AdamClipping
 def attack(model: ConvertModel | torch.nn.Module, x: torch.Tensor, 
            data_min: torch.Tensor, data_max: torch.Tensor, 
            cs: torch.Tensor, rhs: torch.Tensor, timeout: float,
-           attack_iters: int = 100, num_restarts: int = 30) -> tuple[bool, torch.Tensor | None]:
+           attack_iters: int = 100, num_restarts: int = 30, 
+           use_gama: bool = True) -> tuple[bool, torch.Tensor | None]:
     # set all parameters without gradient, this can speedup things significantly.
     grad_status = {}
     for p in model.parameters():
@@ -44,7 +45,7 @@ def attack(model: ConvertModel | torch.nn.Module, x: torch.Tensor,
         timeout=timeout,
     )
     
-    if attack_images is None:
+    if attack_images is None and use_gama and 0:
         attack_images = general_attack(
             model=model, 
             X=x, 
@@ -125,7 +126,6 @@ def general_attack(model: ConvertModel | torch.nn.Module, X: torch.Tensor, data_
         opt.zero_grad(set_to_none=True)
         scheduler.step()
         gama_lambda *= 0.9
-        
 
     return None
     

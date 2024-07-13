@@ -20,8 +20,9 @@ def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_block
     # TODO: shifted relu should not use 0.0, e.g., max(x, 1.0)
     new_masks = {
         j: torch.logical_and(
-                    lower_bounds[j] < 0, 
-                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
+            lower_bounds[j] < 0, 
+            upper_bounds[j] > 0
+        ).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
         for j in lower_bounds
     }
     return new_masks
@@ -40,7 +41,6 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
     for layer in reversed(abstractor.net.split_nodes):
         assert len(abstractor.net.split_activations[layer.name]) == 1
         # layer data
-        this_layer_mask = masks[layer.name].unsqueeze(1)
         pre_act_layer = abstractor.net.split_activations[layer.name][0][0]
         assert len(pre_act_layer.inputs) == 1
         ratio = lAs[pre_act_layer.name]
@@ -53,6 +53,7 @@ def _compute_babsr_scores(abstractor: 'abstractor.abstractor.NetworkAbstractor',
         intercept_candidate = intercept_temp * ratio_temp_1.unsqueeze(1)
         
         # (batch, neuron)
+        this_layer_mask = masks[layer.name].unsqueeze(1)
         reshaped_intercept_candidate = intercept_candidate.view(batch, number_bounds, -1) * this_layer_mask
         intercept_tb.insert(0, reshaped_intercept_candidate.mean(1)) 
 
@@ -120,6 +121,8 @@ def _get_bias_term(input_node, ratio: torch.Tensor) -> torch.Tensor:
                         bias += ll.inputs[-1].param.detach().unsqueeze(-1).unsqueeze(-1)
     elif type(input_node) == BoundBatchNormalization:
         bias = input_node.inputs[-3].param.detach().view(-1, *([1] * (ratio.ndim - 3)))
+    elif type(input_node) == BoundInput:
+        bias = 0
     else: 
         print(type(input_node))
         raise NotImplementedError()
@@ -140,7 +143,6 @@ def update_hidden_bounds_histories(self: 'heuristic.domains_list.DomainsList', l
     sign = _append_tensor(history[lid][1], +1 if literal > 0 else -1)
     beta = _append_tensor(history[lid][2], 0.0) # ReLU only
     history[lid] = (loc, sign, beta)
-
     
     # update bounds
     if literal > 0: # active neuron

@@ -20,7 +20,7 @@ class GlobalSettings:
         # restart
         self.use_restart = 1
         
-        self.restart_current_hidden_branches = 5000
+        self.restart_current_hidden_branches = 1000
         self.restart_visited_hidden_branches = 20000
         
         self.restart_current_input_branches  = 100000
@@ -36,10 +36,11 @@ class GlobalSettings:
         
         # gpu stabilize
         self.use_gpu_tightening = 1
-        self.gpu_tightening_current_hidden_branches = 5000
-        self.gpu_tightening_visited_hidden_branches = 20000
-        self.gpu_tightening_timeout = 50.0
+        self.gpu_tightening_current_hidden_branches = 1000
+        self.gpu_tightening_visited_hidden_branches = 5000
+        self.gpu_tightening_timeout = 5.0
         self.gpu_tightening_patience = 10
+        self.gpu_tightening_topk = 500
         
         # attack
         self.use_attack = 1
@@ -87,7 +88,8 @@ class GlobalSettings:
             self.use_mip_tightening = USE_GUROBI
         
         # FIXME: remove after debugging
-        self.use_gpu_tightening = 1
+        self.use_gpu_tightening = 0
+        # self.gpu_tightening_timeout = 2
         # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
         # self.use_attack = 0
@@ -112,7 +114,8 @@ class GlobalSettings:
             f'\t- gpu_tightening_visited_hidden_branches : {int(self.gpu_tightening_visited_hidden_branches)}\n'
             f'\t- attack                                 : {bool(self.use_attack)}\n'
             f'\t- restart                                : {bool(self.use_restart)}\n'
-            f'\t- stabilize                              : {bool(self.use_mip_tightening)}\n'
+            f'\t- stabilize (CPU)                        : {bool(self.use_mip_tightening)}\n'
+            f'\t- stabilize (GPU)                        : {bool(self.use_gpu_tightening)}\n'
             f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
             f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
             f'\n'

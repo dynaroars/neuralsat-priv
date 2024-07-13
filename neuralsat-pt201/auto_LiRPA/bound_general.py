@@ -806,10 +806,10 @@ class BoundedModule(nn.Module):
         for n in node.inputs:
             self.check_prior_bounds(n)
         for i in range(len(node.inputs)):
-            if (i in node.requires_input_bounds or not node.inputs[i].perturbed
-                    or node.inputs[i].name in self.layers_with_constraint):
-                self.compute_intermediate_bounds(
-                    node.inputs[i], prior_checked=True)
+            if (i in node.requires_input_bounds or not node.inputs[i].perturbed or node.inputs[i].name in self.layers_with_constraint):
+                self.compute_intermediate_bounds(node.inputs[i], prior_checked=True)
+                # print(f'\t\t+ Bound {node.inputs[i]} lower: {node.inputs[i].lower}')
+                # print(f'\t\t+ Bound {node.inputs[i]} upper: {node.inputs[i].upper}')
         node.prior_checked = True
 
     def compute_intermediate_bounds(self, node, prior_checked=False):
@@ -819,6 +819,7 @@ class BoundedModule(nn.Module):
             return
 
         logger.debug(f'Getting the bounds of {node}')
+        # print(f'Getting the bounds of {node}')
 
         if not prior_checked:
             self.check_prior_bounds(node)
@@ -880,9 +881,7 @@ class BoundedModule(nn.Module):
                         aux_bounds = self.aux_reference_bounds[node.name]
                         ref_intermediate_lb, ref_intermediate_ub = aux_bounds
 
-                sparse_C = self.get_sparse_C(
-                    node, sparse_intermediate_bounds,
-                    ref_intermediate_lb, ref_intermediate_ub)
+                sparse_C = self.get_sparse_C(node, sparse_intermediate_bounds, ref_intermediate_lb, ref_intermediate_ub)
                 newC, reduced_dim, unstable_idx, unstable_size = sparse_C
 
                 if unstable_idx is None or unstable_size > 0:
@@ -907,9 +906,7 @@ class BoundedModule(nn.Module):
                             node.lower, node.upper = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
 
                 if reduced_dim:
-                    self.restore_sparse_bounds(
-                        node, unstable_idx, unstable_size,
-                        ref_intermediate_lb, ref_intermediate_ub)
+                    self.restore_sparse_bounds(node, unstable_idx, unstable_size, ref_intermediate_lb, ref_intermediate_ub)
 
         # node.lower and node.upper (intermediate bounds) are computed in
         # the above function. If we have bound references, we set them here
@@ -921,10 +918,8 @@ class BoundedModule(nn.Module):
             # prevent gradients flow. So we need a small guard here.
             # Set the intermediate layer bounds using reference bounds,
             # always choosing the tighter one.
-            node.lower = (torch.max(ref_bounds[0], node.lower).detach()
-                          - node.lower.detach() + node.lower)
-            node.upper = (node.upper - (node.upper.detach()
-                          - torch.min(ref_bounds[1], node.upper).detach()))
+            node.lower = torch.max(ref_bounds[0], node.lower).detach() - node.lower.detach() + node.lower
+            node.upper = node.upper - (node.upper.detach() - torch.min(ref_bounds[1], node.upper).detach())
             # Otherwise, we only use reference bounds to check which neurons
             # are unstable.
 

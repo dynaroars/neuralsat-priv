@@ -23,8 +23,11 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
     if os.environ.get('NEURALSAT_ASSERT'):
-        assert torch.all(x_L <= x_U)
-    return BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+        assert torch.all(x_L <= x_U + 1e-8) #, f'{x_L=}\n\n{x_U=}'
+    new_x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
+    if hasattr(self, 'extras'):
+        new_x.ptb.extras = self.extras
+    return new_x
 
 
 @beartype
@@ -105,6 +108,12 @@ def get_lAs(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu'
             continue
         lAs[node.name] = _to_device(lA.transpose(0, 1), device=device)
     return lAs
+
+
+@beartype
+def get_input_A(self: 'abstractor.abstractor.NetworkAbstractor', device: str = 'cpu') -> tuple:
+    input_node = self.net[self.net.input_name[0]]
+    return input_node.lA, input_node.uA, input_node.lbias, input_node.ubias
 
 
 @beartype

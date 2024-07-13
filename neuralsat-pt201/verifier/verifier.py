@@ -1,7 +1,6 @@
 from __future__ import annotations
 import warnings
 warnings.filterwarnings(action='ignore')
-import triton.profiler as proton
 from beartype import beartype
 import numpy as np
 import traceback
@@ -36,7 +35,7 @@ class Verifier:
     "Branch-and-Bound verifier"
     
     @beartype
-    def __init__(self: 'Verifier', net: 'ConvertModel', input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
+    def __init__(self: 'Verifier', net: ConvertModel | torch.nn.Module , input_shape: tuple, batch: int = 1000, device: str = 'cpu') -> None:
         self.net = net # pytorch model
         self.input_shape = input_shape
         self.device = device
@@ -94,21 +93,19 @@ class Verifier:
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
-        with proton.scope("pre-attack"):
-            # attack
-            Timers.tic('Pre-attack') if Settings.use_timer else None
-            is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
-            Timers.toc('Pre-attack') if Settings.use_timer else None
-            if is_attacked:
-                return ReturnStatus.SAT  
+        # attack
+        Timers.tic('Pre-attack') if Settings.use_timer else None
+        is_attacked, self.adv = self._pre_attack(copy.deepcopy(dnf_objectives))
+        Timers.toc('Pre-attack') if Settings.use_timer else None
+        if is_attacked:
+            return ReturnStatus.SAT  
 
-        with proton.scope("pre-process"):
-            # refine
-            Timers.tic('Preprocess') if Settings.use_timer else None
-            dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
-            Timers.toc('Preprocess') if Settings.use_timer else None
-            if not len(dnf_objectives):
-                return ReturnStatus.UNSAT
+        # refine
+        Timers.tic('Preprocess') if Settings.use_timer else None
+        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
+        Timers.toc('Preprocess') if Settings.use_timer else None
+        if not len(dnf_objectives):
+            return ReturnStatus.UNSAT
         
         # mip attack
         is_attacked, self.adv = self._mip_attack(reference_bounds)
@@ -169,7 +166,10 @@ class Verifier:
                             timeout=timeout
                         )
                     except RuntimeError as exception:
-                        if is_cuda_out_of_memory(exception):
+                        if os.environ.get("NEURALSAT_DEBUG"):
+                            traceback.print_exc()
+                            raise NotImplementedError
+                        elif is_cuda_out_of_memory(exception):
                             if self.batch == 1:
                                 # cannot find a suitable batch size to fit this device
                                 logger.debug('[!] OOM with batch_size=1')
@@ -179,10 +179,6 @@ class Verifier:
                             objective = self.get_objective(dnf_objectives, max_domain=max_domain)
                             continue
                         else:
-                            if os.environ.get("NEURALSAT_DEBUG"):
-                                # NOTE: MUST COMMENT these 2 lines, only for debugging 
-                                traceback.print_exc()
-                                raise NotImplementedError
                             logger.debug('[!] RuntimeError exception')
                             return None
                     except SystemExit:
@@ -256,11 +252,10 @@ class Verifier:
         
     @beartype
     def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float) -> str:
-        with proton.scope("initialization"):
-            # initialization
-            Timers.tic('Initialization') if Settings.use_timer else None
-            self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
-            Timers.toc('Initialization') if Settings.use_timer else None
+        # initialization
+        Timers.tic('Initialization') if Settings.use_timer else None
+        self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
+        Timers.toc('Initialization') if Settings.use_timer else None
                 
         # cleaning
         torch.cuda.empty_cache()
@@ -274,35 +269,36 @@ class Verifier:
         start_time = time.time()
         start_iteration = self.iteration
 
-        with proton.scope("loop"):
-            while len(self.domains_list) > 0:
-                # search
-                Timers.tic('Main loop') if Settings.use_timer else None
-                self._parallel_dpll()
-                Timers.toc('Main loop') if Settings.use_timer else None
-                    
-                # check adv founded
-                if self.adv is not None:
-                    if self._check_adv_f64(self.adv, objective):
-                        return ReturnStatus.SAT
-                    logger.debug("[!] Invalid counter-example")
-                    self.adv = None
+        while len(self.domains_list) > 0:
+            # search
+            Timers.tic('Main loop') if Settings.use_timer else None
+            self._parallel_dpll()
+            Timers.toc('Main loop') if Settings.use_timer else None
                 
-                # check timeout
-                if self._check_timeout(timeout):
-                    return ReturnStatus.TIMEOUT
-                
-                # check restart
-                if self._check_restart(start_time=start_time, start_iteration=start_iteration):
-                    return ReturnStatus.RESTART
+            # check adv founded
+            if self.adv is not None:
+                if self._check_adv_f64(self.adv, objective):
+                    return ReturnStatus.SAT
+                logger.debug("[!] Invalid counter-example")
+                # FIXME
+                return ReturnStatus.INVALID_CEX
+                self.adv = None
             
-                # check unsolvable
-                if len(self.domains_list) > 100000:
-                    return ReturnStatus.UNKNOWN
-                
-                # gpu tightening early stop
-                if self._stop_gpu_tightening():
-                    return ReturnStatus.UNKNOWN
+            # check timeout
+            if self._check_timeout(timeout):
+                return ReturnStatus.TIMEOUT
+            
+            # check restart
+            if self._check_restart(start_time=start_time, start_iteration=start_iteration):
+                return ReturnStatus.RESTART
+        
+            # check unsolvable
+            if len(self.domains_list) > 100000:
+                return ReturnStatus.UNKNOWN
+            
+            # gpu tightening early stop
+            if self._stop_gpu_tightening():
+                return ReturnStatus.UNKNOWN
         
         return ReturnStatus.UNSAT
     
@@ -368,35 +364,39 @@ class Verifier:
         old_domains_length = len(self.domains_list)
         unstable = self.domains_list.count_unstable_neurons()
         if self._check_invoke_cpu_tightening(patience_limit=Settings.mip_tightening_patience):
-            Timers.tic('Tightening') if Settings.use_timer else None
+            Timers.tic('CPU Tightening') if Settings.use_timer else None
             self.milp_tightener(
                 domain_list=self.domains_list, 
                 topk=Settings.mip_tightening_topk, 
                 timeout=Settings.mip_tightening_timeout_per_neuron, 
                 largest=False, # stabilize near-stable neurons
             )
-            Timers.toc('Tightening') if Settings.use_timer else None
+            Timers.toc('CPU Tightening') if Settings.use_timer else None
             
         if self._check_invoke_gpu_tightening(patience_limit=Settings.gpu_tightening_patience):
-            # TODO:
+            Timers.tic('GPU Tightening') if Settings.use_timer else None
             self.gpu_tightener(
                 domain_list=self.domains_list, 
+                topk=Settings.gpu_tightening_topk, 
+                iteration=2,
             )
-            # exit()
+            Timers.toc('GPU Tightening') if Settings.use_timer else None
             
-        with proton.scope("pop"):
-            # step 3: selection
-            Timers.tic('Get domains') if Settings.use_timer else None
-            pick_ret = self.domains_list.pick_out(self.batch, self.device)
-            Timers.toc('Get domains') if Settings.use_timer else None
+        # step 3: selection
+        tic = time.time()
+        Timers.tic('Get domains') if Settings.use_timer else None
+        pick_ret = self.domains_list.pick_out(self.batch, self.device)
+        Timers.toc('Get domains') if Settings.use_timer else None
+        pick_time = time.time() - tic
         
-        with proton.scope("attack"):
-            # step 4: PGD attack
-            Timers.tic('Loop attack') if Settings.use_timer else None
-            self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
-            Timers.toc('Loop attack') if Settings.use_timer else None
-            if self.adv is not None:
-                return
+        # step 4: PGD attack
+        tic = time.time()
+        Timers.tic('Loop attack') if Settings.use_timer else None
+        self.adv = self._attack(pick_ret, n_interval=Settings.attack_interval, timeout=1.0)
+        Timers.toc('Loop attack') if Settings.use_timer else None
+        attack_time = time.time() - tic
+        if self.adv is not None:
+            return
 
         # step 5: complete assignments
         self.adv, remain_idx = self._check_full_assignment(pick_ret)
@@ -408,23 +408,26 @@ class Verifier:
         if not len(pruned_ret.input_lowers): 
             return
             
-        with proton.scope("splitting"):
-            # step 6: branching
-            Timers.tic('Decision') if Settings.use_timer else None
-            decisions = self.decision(self.abstractor, pruned_ret)
-            Timers.toc('Decision') if Settings.use_timer else None
+        # step 6: branching
+        tic = time.time()
+        Timers.tic('Decision') if Settings.use_timer else None
+        decisions = self.decision(self.abstractor, pruned_ret)
+        Timers.toc('Decision') if Settings.use_timer else None
+        decision_time = time.time() - tic
         
-        with proton.scope("over-approximate"):
-            # step 7: abstraction 
-            Timers.tic('Abstraction') if Settings.use_timer else None
-            abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
-            Timers.toc('Abstraction') if Settings.use_timer else None
+        # step 7: abstraction 
+        tic = time.time()
+        Timers.tic('Abstraction') if Settings.use_timer else None
+        abstraction_ret = self.abstractor.forward(decisions, pruned_ret)
+        Timers.toc('Abstraction') if Settings.use_timer else None
+        abstraction_time = time.time() - tic
 
-        with proton.scope("add"):
-            # step 8: pruning unverified branches
-            Timers.tic('Add domains') if Settings.use_timer else None
-            self.domains_list.add(abstraction_ret, decisions)
-            Timers.toc('Add domains') if Settings.use_timer else None
+        # step 8: pruning unverified branches
+        tic = time.time()
+        Timers.tic('Add domains') if Settings.use_timer else None
+        self.domains_list.add(abstraction_ret, decisions)
+        Timers.toc('Add domains') if Settings.use_timer else None
+        add_time = time.time() - tic
 
         # statistics
         self.iteration += 1
@@ -444,12 +447,20 @@ class Verifier:
             msg += f'Iteration elapsed: {time.time() - iter_start:<10.02f} '
             
             if Settings.use_mip_tightening and (not self.input_split):
-                msg += f'Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
+                msg += f'CPU Tightening patience: {self.tightening_patience}/{Settings.mip_tightening_patience:<10}'
+                
+            if Settings.use_gpu_tightening and (not self.input_split):
+                msg += f'GPU Tightening patience: {self.tightening_patience}/{Settings.gpu_tightening_patience:<10}'
                 
             if (not self.input_split) and (unstable is not None):
                 msg += f'Unstable neurons: {unstable:<10}'
             
         logger.info(msg)
+        
+        if os.environ.get("NEURALSAT_TIMING"):
+            # DEBUG: sometimes add_time could be very high
+            logger.debug(f'[TIMING] {pick_time=:<10.03f} {attack_time=:<10.03f} {decision_time=:<10.03f} {abstraction_time=:<10.03f} {add_time=:<10.03f}')
+        
     
     
     from .utils import (

@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings(action='ignore')
 
-import triton.profiler as proton
 from beartype import beartype
 import traceback
 import logging
@@ -14,8 +13,8 @@ import os
 from auto_LiRPA.utils import stop_criterion_batch_any
 from auto_LiRPA import BoundedModule
 
+from util.misc.result import AbstractResults, CoefficientMatrix
 from onnx2pytorch.convert.model import ConvertModel
-from util.misc.result import AbstractResults
 from util.misc.logger import logger
 from abstractor.params import *
 
@@ -51,24 +50,24 @@ class NetworkAbstractor:
     @beartype
     def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
         if self.select_params(objective):
-            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
+            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=}')
             return None
         
         # FIXME: try special settings for ViT
         extra_opts = {'sparse_intermediate_bounds': False}
         if self.select_params(objective, extra_opts=extra_opts):
-            logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, extra_opts={extra_opts}')
+            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {extra_opts=}')
             return None
             
         # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
             if self.select_params(objective):
-                logger.info(f'Initialized abstractor: mode="{self.mode}", method="{self.method}", input_split={self.input_split}, backward_batch_size={Settings.backward_batch_size}')
+                logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=}')
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 2
 
-        logger.info('[!] Initialization failed')
+        logger.info('[setup] Initialization failed')
         raise
             
     @beartype
@@ -84,7 +83,7 @@ class NetworkAbstractor:
             ]
         
         for mode, method in params:
-            logger.debug(f'Try conv_mode={mode}, method={method}, input_split={self.input_split}')
+            logger.debug(f'[select_params] Try {mode=}, {method=}, {self.input_split=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
                 self.mode = mode
@@ -96,7 +95,7 @@ class NetworkAbstractor:
     @beartype
     def _init_module(self: 'NetworkAbstractor', mode: str, objective: typing.Any, extra_opts: dict = {}) -> None:
         bound_opts = {'conv_mode': mode, 'verbosity': 0, **extra_opts}
-        logger.debug(f'bound_opts={bound_opts}')
+        logger.debug(f'[_init_module] {bound_opts=}')
         self.net = BoundedModule(
             model=self.pytorch_model, 
             global_input=torch.zeros(self.input_shape, device=self.device),
@@ -109,7 +108,7 @@ class NetworkAbstractor:
         
         # check conversion correctness
         if objective:
-            dummy = objective.lower_bounds[0].view(self.input_shape).to(self.device)
+            dummy = objective.lower_bounds[0].clone().view(self.input_shape).to(self.device)
         else:
             logger.debug(f'[_init_module] Use random dummy input for checking correctness')
             dummy = torch.randn(self.input_shape, device=self.device) 
@@ -151,7 +150,9 @@ class NetworkAbstractor:
             exit()
         except:
             # NOTE: MUST COMMENT this line, only UNCOMMENT for debugging 
-            # raise 
+            if os.environ.get("NEURALSAT_DEBUG"):
+                raise 
+            
             if logger.level <= logging.DEBUG:
                 traceback.print_exc()
             else:
@@ -284,20 +285,19 @@ class NetworkAbstractor:
             
         # simplify for decision heuristics
         if simplify:
-            with proton.scope("simplify"):
-                # setup optimization parameters
-                self.net.set_bound_opts(get_branching_opt_params())
-                
-                # compute outputs
-                with torch.no_grad():
-                    double_output_lbs, _, = self.net.compute_bounds(
-                        x=(new_x,), 
-                        C=double_cs, 
-                        method='backward', 
-                        reuse_alpha=True,
-                        interm_bounds=new_intermediate_layer_bounds
-                    )
-                return AbstractResults(**{'output_lbs': double_output_lbs})
+            # setup optimization parameters
+            self.net.set_bound_opts(get_branching_opt_params())
+            
+            # compute outputs
+            with torch.no_grad():
+                double_output_lbs, _, = self.net.compute_bounds(
+                    x=(new_x,), 
+                    C=double_cs, 
+                    method='backward', 
+                    reuse_alpha=True,
+                    interm_bounds=new_intermediate_layer_bounds
+                )
+            return AbstractResults(**{'output_lbs': double_output_lbs})
 
         # 2 * batch
         assert len(decisions) == len(domain_params.objective_ids)
@@ -313,15 +313,17 @@ class NetworkAbstractor:
         # setup optimization parameters
         self.net.set_bound_opts(get_beta_opt_params(stop_criterion_batch_any(double_rhs)))
         
-        with proton.scope("full"):
-            # compute outputs
-            double_output_lbs, _ = self.net.compute_bounds(
-                x=(new_x,), 
-                C=double_cs, 
-                method=self.method,
-                decision_thresh=double_rhs,
-                interm_bounds=new_intermediate_layer_bounds,
-            )
+        # compute outputs
+        double_ref_output_lbs = torch.cat([domain_params.output_lbs, domain_params.output_lbs], dim=0) # TODO: torch compile
+        reference_bounds = {self.net.final_name: [double_ref_output_lbs, double_ref_output_lbs + torch.inf]}
+        double_output_lbs, _ = self.net.compute_bounds(
+            x=(new_x,), 
+            C=double_cs, 
+            method=self.method,
+            decision_thresh=double_rhs,
+            interm_bounds=new_intermediate_layer_bounds,
+            reference_bounds=reference_bounds,
+        )
 
         # reorganize output
         with torch.no_grad():
@@ -419,7 +421,62 @@ class NetworkAbstractor:
         forward_func = self._forward_input if self.input_split else self._forward_hidden
         return forward_func(domain_params=domain_params, decisions=decisions, simplify=False)
 
+    
+    # TODO: experimental function
+    def compute_bounds(self, input_lowers, input_uppers, method, cs=None, rhs=None, reference_bounds=None):
+        assert method in ['backward', 'crown-optimized']
+        if os.environ.get('NEURALSAT_ASSERT'):
+            assert not torch.equal(input_lowers, input_uppers)
+        
+        # perturbed input
+        x = self.new_input(x_L=input_lowers, x_U=input_uppers)
 
+        # get split nodes
+        self.net.get_split_nodes()
+    
+        # backward mode
+        lb, ub, aux_reference_bounds = self.net.init_alpha(
+            x=(x,), 
+            c=cs, 
+            share_alphas=Settings.share_alphas, 
+            bound_upper=True,
+        )
+        if method == 'backward':
+            lA, uA, lbias, ubias = self.get_input_A(self.device)
+            coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+            return (lb, ub), coeffs
+            
+        # setup options for optimization mode
+        self.net.set_bound_opts(get_initialize_opt_params(lambda x: False))
+
+        # lower bound
+        lb, _ = self.net.compute_bounds(
+            x=(x,), 
+            C=cs,
+            method=method,
+            aux_reference_bounds=aux_reference_bounds, 
+            reference_bounds=reference_bounds,
+            bound_lower=True,
+            bound_upper=False,
+        )
+        lA, _, lbias, _ = self.get_input_A(self.device)
+        
+        # upper bound
+        _, ub = self.net.compute_bounds(
+            x=(x,), 
+            C=cs,
+            method=method,
+            aux_reference_bounds=aux_reference_bounds, 
+            reference_bounds=reference_bounds,
+            bound_lower=False,
+            bound_upper=True,
+        )
+        _, uA, _, ubias = self.get_input_A(self.device)
+        coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+        
+        return (lb, ub), coeffs
+        
+        
     def __repr__(self):
         return f'{self.__class__.__name__}({self.mode}, {self.method})'
         
@@ -429,7 +486,7 @@ class NetworkAbstractor:
         get_slope, set_slope,
         get_beta, set_beta, reset_beta, update_refined_beta,
         get_hidden_bounds,
-        get_lAs, 
+        get_lAs, get_input_A,
         update_histories,
         hidden_split_idx, input_split_idx,
         build_lp_solver, solve_full_assignment,
