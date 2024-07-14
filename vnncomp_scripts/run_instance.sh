@@ -9,6 +9,13 @@ if [ "$1" != ${VERSION_STRING} ]; then
 	exit 1
 fi
 
+# python 
+CONDA_HOME=~/conda
+CONDA=$CONDA_HOME/bin/conda
+
+NEURALSAT_CONDA_HOME=~/.conda/envs/neuralsat
+NEURALSAT_PY=$NEURALSAT_CONDA_HOME/bin/python
+
 CATEGORY=$2
 ONNX_FILE=$3
 VNNLIB_FILE=$4
@@ -29,7 +36,7 @@ echo ""
 echo "Running '$TOOL_NAME' in category '$CATEGORY' with onnx file '$ONNX_FILE', vnnlib file '$VNNLIB_FILE', results file '$RESULTS_FILE', and timeout '$TIMEOUT'"
 echo ""
 
-python3 $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE
+$NEURALSAT_PY $NEURALSAT_MAIN --net $ONNX_FILE --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE --export_cex
 
 # success
 if [ -f $RESULTS_FILE ]; then
@@ -50,7 +57,7 @@ if [ -f $DNNV_ONNX_SIM ]; then
 	echo "Running '$TOOL_NAME' in category '$CATEGORY' with onnx file '$DNNV_ONNX_SIM', vnnlib file '$VNNLIB_FILE', results file '$RESULTS_FILE', and timeout '$TIMEOUT'"
 	echo ""
 
-	python3 $NEURALSAT_MAIN --net $DNNV_ONNX_SIM --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE
+	$NEURALSAT_PY $NEURALSAT_MAIN --net $DNNV_ONNX_SIM --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE --export_cex
 
 	# success
 	if [ -f $RESULTS_FILE ]; then
@@ -67,7 +74,7 @@ if [ -f $ONNXSIM_ONNX_SIM ]; then
 	echo ""
 	
 	# success
-	python3 $NEURALSAT_MAIN --net $ONNXSIM_ONNX_SIM --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE
+	$NEURALSAT_PY $NEURALSAT_MAIN --net $ONNXSIM_ONNX_SIM --spec $VNNLIB_FILE --timeout $TIMEOUT --verbosity=2 --result_file $RESULTS_FILE --export_cex
 
 	if [ -f $RESULTS_FILE ]; then
 	    rm -r $OUTPUT_DIR
@@ -78,4 +85,3 @@ fi
 if [ -d $OUTPUT_DIR ]; then
 	rm -r $OUTPUT_DIR
 fi
-

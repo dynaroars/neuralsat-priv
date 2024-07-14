@@ -22,10 +22,10 @@ pip install --pre torch torchvision torchaudio --index-url https://download.pyto
 4. Install other requirements:
 
 ```bash
-pip install -r reqs.txt 
+pip install -r requirements.txt
 ```
 
-5. Install the latest `Triton` (**Note**: older versions might not work since `proton` was just added to `Triton` recently):
+5. [Optional] Install the latest `Triton`(**Note**: older versions might not have `proton`):
 
 ```bash
 pip install -U --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/Triton-Nightly/pypi/simple/ triton-nightly

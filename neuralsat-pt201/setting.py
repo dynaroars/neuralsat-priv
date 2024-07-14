@@ -94,7 +94,7 @@ class GlobalSettings:
         # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
-        # self.use_mip_tightening = 0
+        # self.use_mip_tightening = 1
         # self.restart_visited_input_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256
