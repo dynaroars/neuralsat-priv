@@ -154,6 +154,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     objectives.upper_bounds_f64 = objectives.upper_bounds_f64[remaining_index]
     objectives.cs_f64 = objectives.cs_f64[remaining_index]
     objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
+    objectives.ids = objectives.ids[remaining_index]
     
     if None in self.abstractor.split_points:
         # FIXME: disable restart + stabilize for now
@@ -206,6 +207,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             objectives.upper_bounds_f64 = objectives.upper_bounds_f64[remaining_index]
             objectives.cs_f64 = objectives.cs_f64[remaining_index]
             objectives.rhs_f64 = objectives.rhs_f64[remaining_index]
+            objectives.ids = objectives.ids[remaining_index]
             
             # TODO: fixme (update found betas from MIP)
             # self.refined_betas = self.abstractor.net.get_betas()

@@ -421,7 +421,7 @@ class DecompositionalVerifier:
                 subnet_idx=1, 
                 objective=objective, 
                 verify_batch=verify_batch,
-                timeout=10.0,
+                timeout=20.0,
             )
             
             if status not in ['timeout']:
@@ -528,8 +528,8 @@ if __name__ == "__main__":
     
     status = verifier.verify(
         objective=objective,
-        verify_batch=250,
-        tighten_batch=30,
+        verify_batch=500, # batch size of sub-verifiers
+        tighten_batch=50, # number of tightening candidates
         timeout=3600,
         use_extra=True,
     )
