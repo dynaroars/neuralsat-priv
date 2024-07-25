@@ -610,7 +610,7 @@ def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
         return None
     
     unsat_cores = {k: [] for k in self.all_conflict_clauses}
-    if isinstance(self.domains_list, DomainsList):
+    if hasattr(self, 'domains_list') and isinstance(self.domains_list, DomainsList):
         for k, v in self.all_conflict_clauses.items():
             [unsat_cores[k].append(_history_to_conflict_clause(c, self.domains_list.var_mapping)) for c in v]
     return unsat_cores
