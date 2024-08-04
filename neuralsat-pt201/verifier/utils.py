@@ -27,6 +27,7 @@ from attacker.attacker import Attacker
 from abstractor.abstractor import NetworkAbstractor
 
 from util.misc.result import AbstractResults, ReturnStatus
+from util.proof.create_aptp import create_aptp
 from util.misc.check import check_solution
 from util.misc.logger import logger
 
@@ -630,3 +631,20 @@ def get_proof_tree(self: verifier.verifier.Verifier) -> None | dict:
     return proof_tree
         
     
+@beartype
+def export_proof(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, output_dir: str) -> None:
+    os.system(f'rm -rf {output_dir}')
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info(f'Exporting APTP proofs at {output_dir=}')
+    proof_dict = self.get_proof_tree()
+    for i in range(len(dnf_objectives)):
+        # print(objectives.ids[i], objectives.cs[i], objectives.rhs[i], proof[int(objectives.ids[i])])
+        aptp_str = create_aptp(
+            proof=proof_dict.get(int(dnf_objectives.ids[i]), []), 
+            lower=dnf_objectives.lower_bounds[i],
+            upper=dnf_objectives.upper_bounds[i],
+            cnf_cs=dnf_objectives.cs[i], 
+            cnf_rhs=dnf_objectives.rhs[i],
+        )
+        with open(os.path.join(output_dir, f'proof_{i}.aptp'), 'w') as fp:
+            print(aptp_str, file=fp)

@@ -10,6 +10,7 @@ from util.network.read_onnx import parse_onnx
 
 from util.misc.logger import logger, LOGGER_LEVEL
 from util.misc.export import get_adv_string
+from util.misc.result import ReturnStatus
 from util.misc.timer import Timers
 
 from verifier.objective import Objective, DnfObjectives
@@ -55,6 +56,10 @@ if __name__ == '__main__':
                         help="select SPLITTING strategy.")
     parser.add_argument('--test', action='store_true',
                         help="test on small example with special settings.")
+    parser.add_argument('--generate_proof', action='store_true',
+                        help="enable UNSAT proofs generation.")
+    parser.add_argument('--proof_dir', type=str, default='example/proofs/',
+                        help="folder to export UNSAT proofs.")
     args = parser.parse_args()   
     
     
@@ -135,8 +140,6 @@ if __name__ == '__main__':
         
     logger.info(f'[!] Result: {status}')
     logger.info(f'[!] Runtime: {runtime:.04f}')
-    
-    print(f'{status},{runtime:.04f}')
         
     # export
     if args.result_file:
@@ -146,7 +149,15 @@ if __name__ == '__main__':
             if (verifier.adv is not None) and args.export_cex:
                 print(get_adv_string(inputs=verifier.adv, net_path=args.net, is_nhwc=is_nhwc), file=fp)
 
+    if args.generate_proof:
+        if status == ReturnStatus.UNSAT:
+            verifier.export_proof(copy.deepcopy(dnf_objectives), args.proof_dir)
+        
+    
     if Settings.use_timer:
         Timers.toc('Main')
         Timers.print_stats()
         
+    print(f'{status},{runtime:.04f}')
+        
+    

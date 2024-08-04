@@ -474,6 +474,6 @@ class Verifier:
         _check_invoke_gpu_tightening,
         compute_stability, _save_stats, get_stats,
         _prune_objective,
-        get_unsat_core, get_proof_tree,
+        get_unsat_core, get_proof_tree, export_proof,
     )
     
