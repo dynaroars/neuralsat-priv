@@ -35,10 +35,10 @@ class GlobalSettings:
         self.mip_tightening_topk = 64
         
         # gpu stabilize
-        self.use_gpu_tightening = 1
+        self.use_gpu_tightening = 0
         self.gpu_tightening_current_hidden_branches = 1000
         self.gpu_tightening_visited_hidden_branches = 5000
-        self.gpu_tightening_timeout = 5.0
+        self.gpu_tightening_timeout = 10.0
         self.gpu_tightening_patience = 10
         self.gpu_tightening_topk = 500
         
@@ -88,13 +88,13 @@ class GlobalSettings:
             self.use_mip_tightening = USE_GUROBI
         
         # FIXME: remove after debugging
-        self.use_gpu_tightening = 0
+        # self.use_gpu_tightening = 1
         # self.gpu_tightening_timeout = 2
         # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
         # self.use_attack = 0
         # self.use_restart = 0
-        # self.use_mip_tightening = 1
+        # self.use_mip_tightening = 0
         # self.restart_visited_input_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256

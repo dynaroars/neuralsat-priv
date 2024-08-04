@@ -244,7 +244,7 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_ne
             verifier.start_time = time.time()
             stat = verifier._verify_one(objective, preconditions={}, reference_bounds=reference_bounds, timeout=timeout)
             # print(f'{stat=}') #, objective.cs.nonzero())
-            progress_bar.set_postfix(status=stat)
+            progress_bar.set_postfix(status=stat, runtime=time.time() - verifier.start_time)
         except:
             if os.environ.get('NEURALSAT_DEBUG'):
                 raise
