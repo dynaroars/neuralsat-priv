@@ -212,5 +212,5 @@ However, the benefit of restart shows in the ability to significantly reduce ver
 ```
 
 ## ACKNOWLEDGEMENTS
-The *NeuralSAT* research is partially supported by grants from NSF ([2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133)) and an Amazon Research Award.
+The *NeuralSAT* research is partially supported by grants from NSF ([1900676](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1900676), [2019239](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2019239), [2129824](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2129824), [2200621](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2200621), [2217071](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2217071), [2238133](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2238133), [2319131](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2319131)) and an [Amazon Research Award](https://www.amazon.science/research-awards/program-updates/79-amazon-research-awards-recipients-announced).
 
