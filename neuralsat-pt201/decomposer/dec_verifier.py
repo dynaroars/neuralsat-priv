@@ -183,33 +183,18 @@ class DecompositionalVerifier:
         tmp_objective.ids = objective.ids
         tmp_objective.cs = objective.cs
         tmp_objective.rhs = objective.rhs
-        # print(f'{subnet_input_outputs.over_input[0].shape=} {tmp_objective.upper_bounds.shape=}')
-        
-        # mask = torch.where(tmp_objective.lower_bounds * tmp_objective.upper_bounds < 0)
-        # print(f'{mask=}')
-        # print(f'{tmp_objective.lower_bounds.shape=} {tmp_objective.lower_bounds.sum()=} {tmp_objective.upper_bounds.sum()=}')
-        # mask_idx = 12
-        # FIXME: setting lower_bound=0 makes all the bounds worse!!!
-        # print(tmp_objective.lower_bounds[mask[0][mask_idx], mask[1][mask_idx]], tmp_objective.upper_bounds[mask[0][mask_idx], mask[1][mask_idx]])
-        # tmp_objective.lower_bounds[mask[0][mask_idx], mask[1][mask_idx]] = 0.
-        # tmp_objective.upper_bounds[mask[0][mask_idx], mask[1][mask_idx]] = 0.
-        # tmp_objective.upper_bounds[mask] = 0.
-        # tmp_objective.lower_bounds[mask] = 0.
+
         assert torch.all(tmp_objective.lower_bounds < tmp_objective.upper_bounds)
-        # print('passed')
-        # print(f'{tmp_objective.lower_bounds.shape=} {tmp_objective.lower_bounds.sum()=} {tmp_objective.upper_bounds.sum()=}')
-        # print(f'{tmp_objective.lower_bounds=}')
-        # print(f'{tmp_objective.upper_bounds=}')
+
         verifier = self._setup_subnet_verifier(
             subnet_idx=subnet_idx, 
             objective=copy.deepcopy(tmp_objective), 
             batch=verify_batch,
         )
         print(verifier.net)
-        # self.attack_subnet(verifier.net, copy.deepcopy(tmp_objective))
-        # exit()
+
         verifier.start_time = time.time()
-        # print(tmp_objective)
+
         # verifier.abstractor.extras = None
         status = verifier._verify_one(
             objective=copy.deepcopy(tmp_objective), 
@@ -219,15 +204,7 @@ class DecompositionalVerifier:
         )
         
         print(f'{status=}')
-        # (output_lb, output_ub), output_coeffs = verifier.abstractor.compute_bounds(
-        #     input_lowers=self.input_output_bounds[subnet_idx].over_input[0],
-        #     input_uppers=self.input_output_bounds[subnet_idx].over_input[1],
-        #     cs=objective.cs,
-        #     method='backward',
-        #     # method='crown-optimized'
-        # )
-        # print(f'{output_lb=}')
-        # print(f'{output_ub=}')
+
         return status
     
     def attack_subnet(self, model, objective, timeout=5.0):
@@ -399,7 +376,7 @@ class DecompositionalVerifier:
     
         return candidates
         
-    def verify(self, objective, verify_batch, tighten_batch, timeout=3600, use_extra=True):
+    def verify_one(self, objective, verify_batch, tighten_batch, timeout=3600, use_extra=True):
         self.start_time = time.time()
         self.reset()
         
@@ -526,7 +503,7 @@ if __name__ == "__main__":
     # assert torch.all(lb <= ub)
     # formatted_print(lb, ub, f'Split ({use_extra=})')
     
-    status = verifier.verify(
+    status = verifier.verify_one(
         objective=objective,
         verify_batch=500, # batch size of sub-verifiers
         tighten_batch=50, # number of tightening candidates

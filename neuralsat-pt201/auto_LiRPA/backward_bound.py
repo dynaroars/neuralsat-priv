@@ -339,6 +339,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
     sparse_conv_intermediate_bounds = self.bound_opts.get('sparse_conv_intermediate_bounds', False)
     minimum_sparsity = self.bound_opts.get('minimum_sparsity', 0.9)
     crown_batch_size = self.bound_opts.get('crown_batch_size', 1e9)
+    # print(f'{node=} {node.output_shape=}')
     dim = int(prod(node.output_shape[1:]))
     batch_size = self.batch_size
 
@@ -410,8 +411,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 # elements in specifications for all batches.
                 # The shape of patches is [unstable_size, batch, C, H, W].
                 newC = Patches(
-                    shape=[unstable_size, batch_size, *node.output_shape[1:-2],
-                           1, 1],
+                    shape=[unstable_size, batch_size, *node.output_shape[1:-2], 1, 1],
                     identity=1, unstable_idx=unstable_idx,
                     output_shape=[batch_size, *node.output_shape[1:]])
                 reduced_dim = True

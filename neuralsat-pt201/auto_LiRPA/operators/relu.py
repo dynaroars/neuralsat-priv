@@ -185,7 +185,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
             elif unstable_idx.ndim == 1:
                 # Start node is a FC node.
                 # Only unstable neurons of the start_node neurons are used.
-                assert alpha_lookup_idx is None or alpha_lookup_idx.ndim == 1
+                assert alpha_lookup_idx is None or alpha_lookup_idx.ndim == 1, f'{alpha_lookup_idx is None = } {alpha_lookup_idx.ndim=}'
                 if self.options['optimize_bound_args'].get('use_shared_alpha', False):
                     # Shared alpha is used, all output specs use the same alpha. No selection is needed.
                     # The spec dim is 1 and will be broadcast.

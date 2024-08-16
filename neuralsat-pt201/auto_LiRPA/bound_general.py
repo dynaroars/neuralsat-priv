@@ -904,6 +904,7 @@ class BoundedModule(nn.Module):
                             # Compute backward bounds only when there are unstable
                             # neurons, or when we don't know which neurons are unstable.
                             node.lower, node.upper = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
+                            # print(f'\t {node=}, {node.lower=}')
 
                 if reduced_dim:
                     self.restore_sparse_bounds(node, unstable_idx, unstable_size, ref_intermediate_lb, ref_intermediate_ub)

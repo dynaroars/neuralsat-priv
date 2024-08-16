@@ -1,9 +1,7 @@
 from beartype import beartype
 import onnxruntime as ort
-import torch.nn as nn
 import onnx2pytorch
 import numpy as np
-import collections
 # import onnx2torch
 import traceback
 import warnings
@@ -84,17 +82,18 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     batched_output_shape = add_batch(orig_output_shape)
 
     pytorch_model = onnx2pytorch.ConvertModel(onnx_model, experimental=True, quirks=custom_quirks)
+    # pytorch_model = onnx2torch.convert(path)
     pytorch_model.eval()
     
     pytorch_model.to(torch.get_default_dtype())
     
-    is_nhwc = pytorch_model.is_nhwc
+    is_nhwc = getattr(pytorch_model, 'is_nhwc', False)
     
     if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
-        custom_quirks['Softmax']['skip_last_layer'] = pytorch_model.is_last_removed.get('Softmax', False)
+        custom_quirks['Softmax']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Softmax', False)
     
     if custom_quirks.get('Squeeze', {}).get('skip_last_layer', False):
-        custom_quirks['Squeeze']['skip_last_layer'] = pytorch_model.is_last_removed.get('Squeeze', False)
+        custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
     # print('nhwc:', is_nhwc, batched_input_shape)
     

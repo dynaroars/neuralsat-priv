@@ -9,7 +9,5 @@ class Expand(nn.Module):
         try:
             out = input.expand(torch.Size(shape))
         except RuntimeError:
-            out = input * torch.ones(
-                torch.Size(shape), dtype=input.dtype, device=input.device
-            )
+            out = input * torch.ones(torch.Size(shape), dtype=input.dtype, device=input.device)
         return out

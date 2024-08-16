@@ -298,7 +298,7 @@ class Bound(nn.Module):
                     dims.append(i + 1)
             if dims:
                 A = torch.sum(A, dim=dims, keepdim=True)
-            assert A.shape[2:] == shape[1:]  # skip the spec and batch dimension.
+            assert A.shape[2:] == shape[1:], f'{self=} {A.shape=} {shape=}'  # skip the spec and batch dimension.
         else:
             pass
         return A
