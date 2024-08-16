@@ -2,10 +2,15 @@ benchmark/
 benchmark
 ref/
 old/
+neuralsat-pt201/train/weights/
+neuralsat-pt201/train/data/
+neuralsat-pt201/train/checkpoints/
+
 *.lp
 *.json
 *.nsys-rep
 *.hatchet
+
 
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*
