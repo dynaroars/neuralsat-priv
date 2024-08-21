@@ -1,0 +1,29 @@
+dataset_params:
+  im_channels : 3
+  im_size : 224
+
+autoencoder_params:
+  z_channels: 3
+  down_channels : [32, 64, 128]
+  mid_channels : [128, 128]
+  down_sample : [True, True]
+  attn_down : [False, False]
+  norm_channels: 32
+  num_heads: 16
+  num_down_layers : 1
+  num_mid_layers : 1
+  num_up_layers : 1
+
+train_params:
+  seed : 1111
+  task_name: 'checkpoints'
+  autoencoder_batch_size: 32
+  disc_start: 10000
+  disc_weight: 0.5
+  perceptual_weight: 1
+  autoencoder_epochs : 100
+  autoencoder_lr: 0.00001
+  autoencoder_acc_steps : 1
+  autoencoder_img_save_steps : 100
+  vae_autoencoder_ckpt_name: 'vae_autoencoder_ckpt.pth'
+  vae_discriminator_ckpt_name: 'vae_discriminator_ckpt.pth'

@@ -10,14 +10,16 @@ import torch
 import yaml
 import os
 
-from models.discriminator import Discriminator
-from models.lpips import LPIPS
-from models.vae import VAE
-from models.vae_naive import get_model
+from models.vae.discriminator import Discriminator
+from models.vae.vae_naive import get_model
+from models.vae.lpips import LPIPS
+from models.vae.vae import VAE
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = 'cpu'
 
+def get_model_params(model):
+    total_params = sum(p.numel() for p in model.parameters())
+    return total_params
 
 def train(args):
     # Read the config file #
@@ -48,29 +50,62 @@ def train(args):
     #############################
     
     # Create the model and dataset #
-    # model = VAE(
-    #     im_channels=dataset_config['im_channels'],
-    #     model_config=autoencoder_config,
-    # ).to(device)
-    shape = (1, 1, 16, 16)
-    model = get_model(shape).to(device)
+    model = VAE(
+        im_channels=dataset_config['im_channels'],
+        model_config=autoencoder_config,
+    ).to(device)
+    print(model)
+    
+    params = get_model_params(model)
+    print(f'{params=}')
+    
+    # print(model)
+    # shape = (1, 3, 224, 224)
+    # model = get_model(shape).to(device)
 
     # x = torch.randn(shape)
     # y = model(x)
     # print(f'{x.shape=} {y.shape=}')
-    # exit()
-    # print(model)
     
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(16),  # Resize the image to 8x8
         torchvision.transforms.ToTensor(),
     ])
     
-    im_dataset = torchvision.datasets.MNIST(
+    
+    if args.dataset == 'mnist':
+        dataset_class = torchvision.datasets.MNIST
+        dataset_args = {'train': True, 'download': True}
+    
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        
+    elif args.dataset == 'cifar10':
+        dataset_class = torchvision.datasets.CIFAR10
+        dataset_args = {'train': True, 'download': True}
+    
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        
+    elif args.dataset == 'imagenet':
+        dataset_class = torchvision.datasets.ImageNet
+        dataset_args = {'split': 'val'}
+        
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(256),  # Resize the shortest side to 256 pixels
+            torchvision.transforms.CenterCrop(dataset_config['im_size']),  # Center crop the image to 224x224 pixels
+            torchvision.transforms.ToTensor()  # Convert image to a PyTorch tensor
+        ])
+        
+    else:
+        raise ValueError(args.dataset)
+    
+    im_dataset = dataset_class(
         root='data',
-        train=True,
         transform=transform,
-        download=True)
+        **dataset_args
+    )
     
     
     data_loader = DataLoader(
@@ -116,13 +151,13 @@ def train(args):
         optimizer_g.zero_grad()
         optimizer_d.zero_grad()
         
-        for (im, _) in tqdm(data_loader):
+        for (im, _) in tqdm(data_loader, desc=f'Epoch {epoch_idx+1}/{num_epochs}'):
             step_count += 1
             im = im.float().to(device)
             
             # Fetch autoencoders output(reconstructions)
             output = model(im)
-            # output, z = model_output
+            # print(im.shape, output.shape)
             
             # Image Saving Logic
             if step_count % image_save_steps == 0 or step_count == 1:
@@ -130,6 +165,7 @@ def train(args):
                 save_output = torch.clamp(output[:sample_size], -1., 1.).detach().cpu()
                 save_output = ((save_output + 1) / 2)
                 save_input = ((im[:sample_size] + 1) / 2).detach().cpu()
+                # print(f'{output.shape=} {save_input.shape=} {save_output.shape=}')
                 
                 grid = make_grid(torch.cat([save_input, save_output], dim=0), nrow=sample_size)
                 img = torchvision.transforms.ToPILImage()(grid)
@@ -196,7 +232,7 @@ def train(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for vq vae training')
-    parser.add_argument('--config', dest='config_path',
-                        default='config/mnist.yaml', type=str)
+    parser.add_argument('--config', dest='config_path', default='config/mnist.yaml', type=str)
+    parser.add_argument('--dataset', default='mnist', type=str)
     args = parser.parse_args()
     train(args)
