@@ -15,6 +15,8 @@ from timm.utils import NativeScaler, AverageMeter, random_seed
 from timm.models import model_parameters, create_model
 from timm.scheduler import create_scheduler_v2
 
+from models.vit.vit import *
+
 loss_fn_p = torch.nn.CrossEntropyLoss()
 
 def fgsm_attack(model, loss_fn, images, labels, epsilon):
@@ -51,7 +53,7 @@ def train(epoch, train_loader, model, criterion, optimizer, loss_scaler, schedul
 
     second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
     running_loss = 0.0
-    pbar = tqdm(train_loader, desc='[Training]', file=sys.stdout)
+    pbar = tqdm(train_loader, desc='[Training]', file=sys.stdout, disable=True)
     num_updates = epoch * len(train_loader)
     losses_m = AverageMeter()
     
@@ -112,7 +114,7 @@ def test(test_loader, model, device='cpu'):
     model.eval()
 
     running_metric = 0.0
-    pbar = tqdm(test_loader, desc='[Testing]', file=sys.stdout)
+    pbar = tqdm(test_loader, desc='[Testing]', file=sys.stdout, disable=True)
     for batch_id, (X, y) in enumerate(pbar):
         X = X.to(device)
         y = y.to(device)
@@ -134,7 +136,7 @@ def parse_args():
     parser.add_argument('--data_root', default='data')
     parser.add_argument('--save_dir', default='weights')
     parser.add_argument('--model', type=str, default='vit', choices=['vit', 'cct'])
-    parser.add_argument('--lr', type=float, default=5e-4)
+    parser.add_argument('--lr', type=float, default=55e-5)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_epoch', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36)
@@ -280,8 +282,7 @@ def main():
         from models.vit.cct import cct_7_3x1_32_sine
         model_name = 'cct_7_3x1_32_sine'
     elif args.model == 'vit':
-        from models.vit.vit import vit_6_4_128, vit_7_4_256
-        model_name = 'vit_7_4_256'
+        model_name = args.output_name
     else:
         raise ValueError(args.model)
     
@@ -327,12 +328,13 @@ def main():
     # exit()
 
     # train
-    print('\n\n[Training]')
-    for epoch in range(num_epochs):
+    # print('\n\n[Training]')
+    pbar = tqdm(range(num_epochs), desc=f'{model_name}')
+    for epoch in pbar:
         lrl = [param_group['lr'] for param_group in optimizer.param_groups]
         lr = sum(lrl) / len(lrl)
-        print(f'\n[Epoch {epoch + 1} / {num_epochs}] {lr=:.07f}')
-        train_epoch_loss = train(
+        # print(f'\n[Epoch {epoch + 1} / {num_epochs}] {lr=:.07f}')
+        train_loss = train(
             epoch=epoch,
             train_loader=train_loader, 
             model=model, 
@@ -343,18 +345,21 @@ def main():
             amp_autocast=amp_autocast,
             device=args.device,
         )
-        print(f'[Epoch {epoch + 1} / {num_epochs}] train_loss={train_epoch_loss}')
+        # print(f'[Epoch {epoch + 1} / {num_epochs}] train_loss={train_epoch_loss}')
 
-        val_epoch_acc = test(
+        val_acc = test(
             test_loader=test_loader, 
             model=model, 
             device=args.device,
         )
-        print(f'[Epoch {epoch + 1} / {num_epochs}] val_acc={val_epoch_acc:.4f}')
+        # print(f'[Epoch {epoch + 1} / {num_epochs}] val_acc={val_epoch_acc:.4f}')
 
         if scheduler is not None:
             # step LR for next epoch
-            scheduler.step(epoch + 1, val_epoch_acc)
+            scheduler.step(epoch + 1, val_acc)
+            
+        pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr)
+        
     # save
     model.eval()
     os.makedirs(args.save_dir, exist_ok=True)

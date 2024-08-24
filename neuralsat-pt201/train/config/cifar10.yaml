@@ -1,6 +1,6 @@
 dataset_params:
   im_channels : 3
-  im_size : 64
+  im_size : 32
 
 autoencoder_params:
   z_channels: 3
@@ -9,20 +9,20 @@ autoencoder_params:
   down_sample : [True, True]
   attn_down : [False, False]
   norm_channels: 32
-  num_heads: 16
+  num_heads: 8
   num_down_layers : 1
   num_mid_layers : 1
   num_up_layers : 1
 
 train_params:
   seed : 1111
-  task_name: 'checkpoints/imagenet'
-  autoencoder_batch_size: 32
+  task_name: 'checkpoints/cifar10'
+  autoencoder_batch_size: 64
   disc_start: 10000
   disc_weight: 0.5
   perceptual_weight: 1
-  autoencoder_epochs : 1000
-  autoencoder_lr: 0.00001
+  autoencoder_epochs : 5000
+  autoencoder_lr: 0.0005
   autoencoder_acc_steps : 1
   autoencoder_img_save_steps : 100
   vae_autoencoder_ckpt_name: 'vae_autoencoder_ckpt.pth'

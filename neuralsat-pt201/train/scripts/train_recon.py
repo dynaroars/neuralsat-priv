@@ -93,7 +93,7 @@ def train(args):
         dataset_args = {'split': 'val'}
         
         transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(256),  # Resize the shortest side to 256 pixels
+            torchvision.transforms.Resize(80),  # Resize the shortest side to 256 pixels
             torchvision.transforms.CenterCrop(dataset_config['im_size']),  # Center crop the image to 224x224 pixels
             torchvision.transforms.ToTensor()  # Convert image to a PyTorch tensor
         ])
@@ -170,7 +170,8 @@ def train(args):
                 grid = make_grid(torch.cat([save_input, save_output], dim=0), nrow=sample_size)
                 img = torchvision.transforms.ToPILImage()(grid)
                 os.makedirs(os.path.join(train_config['task_name'], 'vae_autoencoder_samples'), exist_ok=True)
-                img.save(os.path.join(train_config['task_name'],'vae_autoencoder_samples', f'current_autoencoder_sample_{img_save_count}.png'))
+                # img.save(os.path.join(train_config['task_name'],'vae_autoencoder_samples', f'current_autoencoder_sample_{img_save_count}.png'))
+                img.save(os.path.join(train_config['task_name'],'vae_autoencoder_samples', f'current_autoencoder_sample.png'))
                 img_save_count += 1
                 img.close()
             
