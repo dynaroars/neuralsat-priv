@@ -132,7 +132,7 @@ class NetworkAbstractor:
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
             self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
-            lb, _ = self.net.compute_bounds(x=(x,), method=method)
+            lb, _ = self.net.compute_bounds(x=(x,), method=method) # FIXME: it uses a lot of RAM
             assert not torch.isnan(lb).any()
         except KeyboardInterrupt:
             exit()
