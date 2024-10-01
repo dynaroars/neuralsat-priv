@@ -142,7 +142,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     try:
         ret = self.abstractor.initialize(tmp_objective)
     except:
-        print('Failed to initialize objectives')
+        print('[!] Failed to preprocess objectives')
         return objectives, None
 
     # pruning
@@ -253,7 +253,7 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bo
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -266,7 +266,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         device=self.device,
     )
 
-    self.abstractor.setup(objective)
+    self.abstractor.setup(objective, extra_opts=extra_opts)
     self.abstractor.net.get_split_nodes()
     
 
@@ -283,12 +283,11 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         #     self.input_split = True
     
     if self.input_split:
-        params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1}
+        params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': False}}
     else:
-        params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 5}
+        params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'smart', 'decision_topk': 5, 'extra_opts': {'sparse_intermediate_bounds': True}}
 
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
-    abstract_method = params['abstract_method']
 
     # decision heuristic
     assert params['input_split'] == self.input_split
@@ -298,7 +297,7 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_method=params['decision_method'],
     )
         
-    self._init_abstractor(abstract_method, objective)
+    self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
         
 
 

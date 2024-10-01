@@ -63,10 +63,13 @@ def test_1():
     x_L = torch.tensor([[-1.0, -2.0]])
     x_U = torch.tensor([[1.0, 2.0]])
     
+    print(net)
+    
     device = 'cpu'
     method = 'backward'
-    # relu_option = 'adaptive'
-    relu_option = 'zero-lb'
+    method = 'crown-optimized'
+    relu_option = 'adaptive'
+    # relu_option = 'zero-lb'
     
     abstractor = BoundedModule(
         model=net, 
@@ -85,11 +88,21 @@ def test_1():
     abstractor.get_split_nodes()
     
     print(abstractor)
-    with torch.no_grad():
-        lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
-        # print('[backward] lower', lb)
-        # print('[backward] upper', ub)
+    lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=None, bound_upper=True)
+    print(f'[{method}] lower', lb)
+    print(f'[{method}] upper', ub)
         
+    c1 = torch.tensor([1, 0, 0]).view(1, -1)
+    c2 = torch.tensor([0, 1, 0]).view(1, -1)
+    c3 = torch.tensor([0, 0, 1]).view(1, -1)
+    cs = torch.stack([c1, c3], dim=1)
+    print(cs.shape)
+    
+    lb, ub = abstractor.compute_bounds(x=(new_x,), method=method, C=cs, bound_upper=True)
+    print(f'[{method}] lower', lb)
+    print(f'[{method}] upper', ub)
+        
+    # exit()
     
     if 0:
         print('###### After ######')
@@ -103,7 +116,7 @@ def test_1():
         print('[backward] upper', ub)
         print()
         
-    if 1:
+    if 0:
         list_nodes, (lAs, uAs) = get_As(abstractor)
         for i, k in enumerate(list_nodes):
             print(f'- Layer {i+1}:', k)

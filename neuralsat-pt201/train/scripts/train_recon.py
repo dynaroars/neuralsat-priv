@@ -67,9 +67,9 @@ def train(args):
     # y = model(x)
     # print(f'{x.shape=} {y.shape=}')
     
-    transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-    ])
+    # transform = torchvision.transforms.Compose([
+    #     torchvision.transforms.ToTensor(),
+    # ])
     
     
     if args.dataset == 'mnist':
@@ -86,6 +86,7 @@ def train(args):
     
         transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
+            # torchvision.transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2470, 0.2435, 0.2616]),
         ])
         
     elif args.dataset == 'imagenet':
@@ -186,6 +187,7 @@ def train(args):
             if step_count > disc_step_start:
                 disc_fake_pred = discriminator(output)
                 disc_fake_loss = disc_criterion(disc_fake_pred, torch.ones(disc_fake_pred.shape, device=disc_fake_pred.device))
+                assert not torch.isnan(disc_fake_loss)
                 gen_losses.append(train_config['disc_weight'] * disc_fake_loss.item())
                 g_loss += train_config['disc_weight'] * disc_fake_loss / acc_steps
             lpips_loss = torch.mean(lpips_model(output, im)) / acc_steps

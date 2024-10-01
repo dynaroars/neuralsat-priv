@@ -17,13 +17,13 @@ autoencoder_params:
 train_params:
   seed : 1111
   task_name: 'checkpoints/cifar10'
-  autoencoder_batch_size: 64
-  disc_start: 10000
+  autoencoder_batch_size: 32
+  disc_start: 100
   disc_weight: 0.5
   perceptual_weight: 1
   autoencoder_epochs : 5000
-  autoencoder_lr: 0.0005
+  autoencoder_lr: 0.00001
   autoencoder_acc_steps : 1
-  autoencoder_img_save_steps : 100
+  autoencoder_img_save_steps : 500
   vae_autoencoder_ckpt_name: 'vae_autoencoder_ckpt.pth'
   vae_discriminator_ckpt_name: 'vae_discriminator_ckpt.pth'

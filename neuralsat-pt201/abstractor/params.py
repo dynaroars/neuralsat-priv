@@ -36,7 +36,7 @@ def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
             'enable_alpha_crown': True,
             'enable_beta_crown': False, 
             'use_shared_alpha': Settings.share_alphas, 
-            'init_alpha': False,
+            'init_alpha': False, # no need to initilize again
             'fix_interm_bounds': True,
             'stop_criterion_func': stop_criterion_func,
             'iteration': 50, 

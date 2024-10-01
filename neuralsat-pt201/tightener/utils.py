@@ -174,12 +174,14 @@ def extract_solved_objective(verifier, objective):
         cond = torch.matmul(objective.cs, output.unsqueeze(-1)).squeeze(-1) - objective.rhs
         falsified_ids = torch.where(cond.amax(dim=-1) < 0.0)[0].cpu().detach().numpy().tolist()
         attack_samples.append(verifier.adv)
+        # print(f'{falsified_ids=}')
         
     if len(verifier.domains_list):
         remaining_domains = verifier.domains_list.pick_out_worst_domains(len(verifier.domains_list), device='cpu')  
         unsolved_objective_ids = remaining_domains.objective_ids.unique().int()
     else:
         unsolved_objective_ids = []
+    # print(f'{unsolved_objective_ids=}')
         
     for idx, value in enumerate(objective.ids):
         if idx in falsified_ids:
@@ -192,6 +194,7 @@ def extract_solved_objective(verifier, objective):
             # print(idx, value, worst_bound)
         else:
             verified_ids.append(idx)
+    # print(f'{unsolved_ids_w_bounds=}')
         
     return verified_ids, falsified_ids, unsolved_ids_w_bounds, attack_samples
 
@@ -249,17 +252,22 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_ne
             if os.environ.get('NEURALSAT_DEBUG'):
                 raise
             print(f'[!] ERROR')
+            
+        # print(f'\t- {current_candidates=}')
 
         # extract
         verified_ids, falsified_ids, unsolved_ids_w_bounds, adv = extract_solved_objective(verifier=verifier, objective=objective)
         verified_candidates.extend([current_candidates[i][0] for i in verified_ids])
         falsified_candidates.extend([current_candidates[i][0] for i in falsified_ids])
         for (unsolved_id, bound) in unsolved_ids_w_bounds:
+            assert bound < 0
             unsolved_candidate = current_candidates[unsolved_id][0]
             if unsolved_candidate[-1] == 'lt':
-                verified_candidates.append((unsolved_candidate[0], unsolved_candidate[1] + bound, unsolved_candidate[2]))
+                new_candidate = (unsolved_candidate[0], unsolved_candidate[1] + bound, unsolved_candidate[2])
             else:
-                verified_candidates.append((unsolved_candidate[0], unsolved_candidate[1] - bound, unsolved_candidate[2]))
+                new_candidate = (unsolved_candidate[0], unsolved_candidate[1] - bound, unsolved_candidate[2])
+            print(f'[DEBUG] unverified {unsolved_candidate} but verified {new_candidate}')
+            verified_candidates.append(new_candidate)
         attack_samples += adv
         progress_bar.update(len(current_candidates))
     progress_bar.close()

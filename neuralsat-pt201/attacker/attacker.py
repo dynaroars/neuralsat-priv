@@ -1,4 +1,5 @@
 from beartype import beartype
+import torch.nn as nn
 import random
 import torch
 import os
@@ -20,7 +21,7 @@ DBG = pdb.set_trace
 class Attacker:
     
     @beartype
-    def __init__(self: 'Attacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
+    def __init__(self: 'Attacker', net: ConvertModel | nn.Module, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
         self.attackers = [
             RandomAttacker(net, objective, input_shape, device=device),
             PGDAttacker(net, objective, input_shape, device=device),
@@ -59,7 +60,7 @@ class Attacker:
 class PGDAttacker:
 
     @beartype
-    def __init__(self: 'PGDAttacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str = 'cpu') -> None:
+    def __init__(self: 'PGDAttacker', net: ConvertModel | nn.Module, objective: DnfObjectives, input_shape: tuple, device: str = 'cpu') -> None:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape

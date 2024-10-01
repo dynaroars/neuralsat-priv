@@ -91,8 +91,8 @@ def get_hidden_bounds(self: 'abstractor.abstractor.NetworkAbstractor', output_lb
     lower_bounds[self.net.final_name] = _to_device(output_lbs.flatten(1).detach(), device=device)
     upper_bounds[self.net.final_name] = _to_device(output_ubs.flatten(1).detach(), device=device)
 
-    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, print([_.shape[0] for _ in lower_bounds.values()])
-    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, print([_.shape[0] for _ in upper_bounds.values()])
+    assert len(list(set([_.shape[0] for _ in lower_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in lower_bounds.values()]}'
+    assert len(list(set([_.shape[0] for _ in upper_bounds.values()]))) == 1, f'Hidden lower: {[_.shape[0] for _ in upper_bounds.values()]}'
     
     return lower_bounds, upper_bounds
 

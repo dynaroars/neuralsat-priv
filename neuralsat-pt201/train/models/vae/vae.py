@@ -54,10 +54,12 @@ class VAE(nn.Module):
         
         # self.encoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[-1])
         self.encoder_norm_out = nn.Identity()
-        self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], self.z_channels, kernel_size=3, padding=1)
+        # self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], self.z_channels, kernel_size=3, padding=1)
+        self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], 2*self.z_channels, kernel_size=3, padding=1)
         
         # Latent Dimension is 2*Latent because we are predicting mean & variance
-        self.pre_quant_conv = nn.Conv2d(self.z_channels, self.z_channels, kernel_size=1)
+        # self.pre_quant_conv = nn.Conv2d(self.z_channels, self.z_channels, kernel_size=1)
+        self.pre_quant_conv = nn.Conv2d(2*self.z_channels, 2*self.z_channels, kernel_size=1)
         ####################################################
         
         
@@ -98,11 +100,11 @@ class VAE(nn.Module):
         out = out.relu()
         out = self.encoder_conv_out(out)
         out = self.pre_quant_conv(out)
-        return out
+        # return out
         mean, logvar = torch.chunk(out, 2, dim=1)
         # return mean, out
         std = torch.exp(0.5 * logvar)
-        sample = mean + std * torch.ones_like(mean).to(x)
+        sample = mean + std * 0.1 # torch.randn_like(mean).to(x)
         return sample, out
     
     def decode(self, z):
@@ -127,6 +129,6 @@ class VAE(nn.Module):
 
 
     def forward(self, x):
-        z = self.encode(x)
+        z, _ = self.encode(x)
         out = self.decode(z)
         return out

@@ -26,7 +26,7 @@ custom_quirks = {
         'skip_last_layer': True
     },
     'Conv' :{
-        'merge_batch_norm': True
+        'merge_batch_norm': False
     },
 }
 
@@ -95,7 +95,8 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     if custom_quirks.get('Squeeze', {}).get('skip_last_layer', False):
         custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
-    # print('nhwc:', is_nhwc, batched_input_shape)
+    print(pytorch_model)
+    print('nhwc:', is_nhwc, batched_input_shape)
     
     # check conversion
     correct_conversion = True
@@ -108,6 +109,9 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
+        print(torch.norm(
+            output_onnx - torch.from_numpy(output_pytorch)
+        ))
     except:
         raise OnnxConversionError
 
@@ -148,16 +152,17 @@ def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
     extractor = onnx.utils.Extractor(model)
     
     # find split_idx
-    activation_count = 0
+    # activation_count = 0
     split_layer = None
-    for _, node in enumerate(nodes):
-        if is_activation_node(node):
-            activation_count += 1
+    for node_idx, node in enumerate(nodes):
+        # if is_activation_node(node):
+            # activation_count += 1
             
-        if activation_count == split_idx:
+        if node_idx == split_idx:
             split_layer = node
             break
     # ensure we found the split_idx-th activation function
+    # print(f'{split_layer=}')
     if split_layer is None:
         return None, None
 
@@ -165,16 +170,22 @@ def decompose_onnx(onnx_path: str | io.BytesIO, split_idx: int):
     n1_input = [_.name for _ in model.graph.input]
     n2_output = [_.name for _ in model.graph.output]
     
+    print(f'{n1_input=}')
+    print(f'{n2_output=}')
+    print(f'{split_layer.input=}')
+    print(f'{split_layer.output=}')
     # prefix model: input -> split_idx
     prefix = extractor.extract_model(n1_input, split_layer.input)
     prefix_buffer = io.BytesIO()
     onnx.save(prefix, prefix_buffer)
+    onnx.save(prefix, 'cac_prefix.onnx')
     prefix_buffer.seek(0)
     
     # suffix model: split_idx -> output
     suffix = extractor.extract_model(split_layer.input, n2_output)
     suffix_buffer = io.BytesIO()
     onnx.save(suffix, suffix_buffer)
+    onnx.save(suffix, 'cac_suffix.onnx')
     suffix_buffer.seek(0)
     
     return prefix_buffer, suffix_buffer
@@ -192,6 +203,12 @@ def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tup
         onnx_buffer,
         verbose=False,
         opset_version=12, # TODO: matter?
+        # input_names=["input"],
+        # output_names=["output"],
+        # dynamic_axes={
+        #     'input': {0: 'batch_size'},
+        #     'output': {0: 'batch_size'},
+        # }
     )
     onnx_buffer.seek(0)
     
@@ -200,6 +217,7 @@ def decompose_pytorch(pytorch_model: onnx2pytorch.ConvertModel, input_shape: tup
 
 @beartype
 def parse_onnx(path: str | io.BytesIO) -> tuple:
+    return _parse_onnx(path)
     while True:
         try:
             return _parse_onnx(path)

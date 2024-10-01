@@ -1,4 +1,5 @@
 from beartype import beartype
+import torch.nn as nn
 import numpy as np
 import random
 import torch
@@ -11,7 +12,7 @@ from verifier.objective import DnfObjectives
 class RandomAttacker:
 
     @beartype
-    def __init__(self: 'RandomAttacker', net: ConvertModel, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
+    def __init__(self: 'RandomAttacker', net: ConvertModel | nn.Module, objective: DnfObjectives, input_shape: tuple, device: str) -> None:
         self.net = net
         self.objective = objective
         self.input_shape = input_shape

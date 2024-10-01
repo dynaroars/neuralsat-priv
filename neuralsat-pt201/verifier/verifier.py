@@ -180,6 +180,7 @@ class Verifier:
                             continue
                         else:
                             logger.debug('[!] RuntimeError exception')
+                            traceback.print_exc()
                             return None
                     except SystemExit:
                         exit()

@@ -48,22 +48,23 @@ class NetworkAbstractor:
         return self._split_points
         
     @beartype
-    def setup(self: 'NetworkAbstractor', objective: typing.Any) -> None:
-        if self.select_params(objective):
-            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=}')
+    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> None:
+        if self.select_params(objective, extra_opts=extra_opts):
+            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=} {extra_opts=}')
             return None
         
         # FIXME: try special settings for ViT
-        extra_opts = {'sparse_intermediate_bounds': False}
-        if self.select_params(objective, extra_opts=extra_opts):
-            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {extra_opts=}')
+        new_extra_opts = copy.deepcopy(extra_opts)
+        new_extra_opts.update({'sparse_intermediate_bounds': False})
+        if self.select_params(objective, extra_opts=new_extra_opts):
+            logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {new_extra_opts=}')
             return None
             
         # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
-            if self.select_params(objective):
-                logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=}')
+            if self.select_params(objective, extra_opts=extra_opts):
+                logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=} {extra_opts=}')
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 2
 
@@ -83,7 +84,7 @@ class NetworkAbstractor:
             ]
         
         for mode, method in params:
-            logger.debug(f'[select_params] Try {mode=}, {method=}, {self.input_split=}')
+            logger.debug(f'[select_params] Try {mode=}, {method=}, {self.input_split=} {extra_opts=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
             if self._check_module(method=method, objective=objective):
                 self.mode = mode
@@ -139,10 +140,12 @@ class NetworkAbstractor:
         if math.prod(self.input_shape) >= 100000:
             return True
         
+        return True # TODO: remove
+    
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
             self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
-            lb, _ = self.net.compute_bounds(x=(x,), method=method)
+            lb, _ = self.net.compute_bounds(x=(x,), method=method) # FIXME: this uses a lot of RAM
             assert not torch.isnan(lb).any()
         except KeyboardInterrupt:
             exit()
@@ -434,6 +437,12 @@ class NetworkAbstractor:
         # get split nodes
         self.net.get_split_nodes()
     
+        # if Settings.share_alphas:
+        #     print(f'[!] Using {Settings.share_alphas=} will lose precision.')
+
+        # setup options for optimization mode
+        self.net.set_bound_opts(get_initialize_opt_params(lambda x: False))
+        
         # backward mode
         lb, ub, aux_reference_bounds = self.net.init_alpha(
             x=(x,), 
@@ -441,13 +450,13 @@ class NetworkAbstractor:
             share_alphas=Settings.share_alphas, 
             bound_upper=True,
         )
+        coeffs = None
+        # print(f'Inititial bounds with {method=}:', lb.detach().cpu())
+        
         if method == 'backward':
-            lA, uA, lbias, ubias = self.get_input_A(self.device)
-            coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+            # lA, uA, lbias, ubias = self.get_input_A(self.device)
+            # coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
             return (lb, ub), coeffs
-            
-        # setup options for optimization mode
-        self.net.set_bound_opts(get_initialize_opt_params(lambda x: False))
 
         # lower bound
         lb, _ = self.net.compute_bounds(
@@ -459,7 +468,8 @@ class NetworkAbstractor:
             bound_lower=True,
             bound_upper=False,
         )
-        lA, _, lbias, _ = self.get_input_A(self.device)
+        # lA, _, lbias, _ = self.get_input_A(self.device)
+        # print(f'Optimized bounds with {method=}:', lb.detach().cpu())
         
         # upper bound
         _, ub = self.net.compute_bounds(
@@ -471,8 +481,8 @@ class NetworkAbstractor:
             bound_lower=False,
             bound_upper=True,
         )
-        _, uA, _, ubias = self.get_input_A(self.device)
-        coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+        # _, uA, _, ubias = self.get_input_A(self.device)
+        # coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
         
         return (lb, ub), coeffs
         

@@ -58,7 +58,7 @@ class GlobalSettings:
         self.test = 0
         
         # abstraction
-        self.share_alphas = 0
+        self.share_alphas = 0 
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000
         self.forward_dynamic = 0
@@ -92,15 +92,16 @@ class GlobalSettings:
         # self.gpu_tightening_timeout = 2
         # self.restart_visited_hidden_branches = 100
         # self.use_timer = 1
-        # self.use_attack = 0
-        # self.use_restart = 0
-        # self.use_mip_tightening = 0
+        self.use_attack = 0
+        self.use_restart = 0
+        self.use_mip_tightening = 0
         # self.restart_visited_input_branches = 100000
         # self.mip_tightening_timeout_per_neuron = 1.0
         # self.backward_batch_size = 256
         # self.restart_max_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
+        self.share_alphas = 1 # sharing alphas loses precision
             
         
     def __repr__(self):

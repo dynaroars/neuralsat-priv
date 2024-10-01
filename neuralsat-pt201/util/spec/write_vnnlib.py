@@ -13,7 +13,7 @@ def write_vnnlib(spec_path: str,
     y = prediction.argmax(-1).item()
     
     with open(spec_path, "w") as f:
-        f.write(f"; Specification\n")
+        f.write(f"; Specification for class {int(y)}\n")
 
         f.write(f"\n; Definition of input variables\n")
         for i in range(len(x_ub)):
@@ -29,7 +29,7 @@ def write_vnnlib(spec_path: str,
             f.write(f"(assert (>= X_{i} {x_lb[i]:.8f}))\n\n")
 
         f.write(f"\n; Definition of output constraints\n")
-        if negate_spec:
+        if not negate_spec:
             for i in range(n_class):
                 if i == y:
                     continue

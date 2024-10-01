@@ -15,6 +15,7 @@ from timm.utils import NativeScaler, AverageMeter, random_seed
 from timm.models import model_parameters, create_model
 from timm.scheduler import create_scheduler_v2
 
+from models.resnet.resnet import *
 from models.vit.vit import *
 
 loss_fn_p = torch.nn.CrossEntropyLoss()
@@ -132,11 +133,12 @@ def test(test_loader, model, device='cpu'):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_name', required=True)
+    parser.add_argument('--output_folder', required=True)
     parser.add_argument('--dataset', default='mnist')
     parser.add_argument('--data_root', default='data')
     parser.add_argument('--save_dir', default='weights')
-    parser.add_argument('--model', type=str, default='vit', choices=['vit', 'cct'])
-    parser.add_argument('--lr', type=float, default=55e-5)
+    parser.add_argument('--model', type=str, default='vit', choices=['vit', 'resnet'])
+    parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_epoch', type=int, default=10)
     parser.add_argument('--seed', type=int, default=36)
@@ -278,13 +280,7 @@ def main():
         #     print(f'val_acc={val_epoch_acc:.4f}')
         #     exit()
         
-    if args.model == 'cct':
-        from models.vit.cct import cct_7_3x1_32_sine
-        model_name = 'cct_7_3x1_32_sine'
-    elif args.model == 'vit':
-        model_name = args.output_name
-    else:
-        raise ValueError(args.model)
+    model_name = args.output_name
     
     model = create_model(
         model_name,
@@ -362,8 +358,8 @@ def main():
         
     # save
     model.eval()
-    os.makedirs(args.save_dir, exist_ok=True)
-    model_save_file = os.path.join(args.save_dir, f'{args.output_name}.pt')
+    os.makedirs(f'{args.save_dir}/{args.output_folder}/', exist_ok=True)
+    model_save_file = os.path.join(f'{args.save_dir}/{args.output_folder}/', f'{args.output_name}.pt')
     torch.save(model.state_dict(), model_save_file)
     # torch.onnx.export(
     #     model.cpu(),
@@ -372,6 +368,7 @@ def main():
     #     verbose=False,
     #     opset_version=12,
     # )
+    print('Accuracy:', val_acc)
 
 if __name__ == '__main__':
     main()
