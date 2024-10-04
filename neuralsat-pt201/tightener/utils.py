@@ -260,7 +260,7 @@ def verify_dnf_pairs(verifier, input_lower, input_upper, n_outputs, candidate_ne
         verified_candidates.extend([current_candidates[i][0] for i in verified_ids])
         falsified_candidates.extend([current_candidates[i][0] for i in falsified_ids])
         for (unsolved_id, bound) in unsolved_ids_w_bounds:
-            assert bound < 0
+            assert bound < 0, f'{bound=}'
             unsolved_candidate = current_candidates[unsolved_id][0]
             if unsolved_candidate[-1] == 'lt':
                 new_candidate = (unsolved_candidate[0], unsolved_candidate[1] + bound, unsolved_candidate[2])

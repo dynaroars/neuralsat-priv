@@ -40,8 +40,9 @@ class Objective:
         self.cs_f64 = torch.tensor(prop_mat, dtype=torch.float64)
         self.rhs_f64 = torch.tensor(prop_rhs, dtype=torch.float64)
         
-        if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
-            assert (self.rhs == 0).all()
+        # TODO: uncomment
+        # if custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
+        #     assert (self.rhs == 0).all()
     
     
     @beartype

@@ -10,15 +10,10 @@ class DownBlock(nn.Module):
     3. Downsample
     """
     
-    def __init__(self, in_channels, out_channels, t_emb_dim,
-                 down_sample, num_heads, num_layers, attn, norm_channels, cross_attn=False, context_dim=None):
+    def __init__(self, in_channels, out_channels, down_sample, num_layers):
         super().__init__()
         self.num_layers = num_layers
         self.down_sample = down_sample
-        self.attn = attn
-        self.context_dim = context_dim
-        self.cross_attn = cross_attn
-        self.t_emb_dim = t_emb_dim
         self.resnet_conv_first = nn.ModuleList(
             [
                 nn.Sequential(
@@ -72,12 +67,9 @@ class MidBlock(nn.Module):
     3. Resnet block with time embedding
     """
     
-    def __init__(self, in_channels, out_channels, t_emb_dim, num_heads, num_layers, norm_channels, cross_attn=None, context_dim=None):
+    def __init__(self, in_channels, out_channels, num_layers):
         super().__init__()
         self.num_layers = num_layers
-        self.t_emb_dim = t_emb_dim
-        self.context_dim = context_dim
-        self.cross_attn = cross_attn
         self.resnet_conv_first = nn.ModuleList(
             [
                 nn.Sequential(
@@ -110,7 +102,7 @@ class MidBlock(nn.Module):
             ]
         )
     
-    def forward(self, x, t_emb=None, context=None):
+    def forward(self, x):
         out = x
         
         # First resnet block
@@ -139,13 +131,10 @@ class UpBlock(nn.Module):
     3. Attention Block
     """
     
-    def __init__(self, in_channels, out_channels, t_emb_dim,
-                 up_sample, num_heads, num_layers, attn, norm_channels):
+    def __init__(self, in_channels, out_channels, up_sample, num_layers):
         super().__init__()
         self.num_layers = num_layers
         self.up_sample = up_sample
-        self.t_emb_dim = t_emb_dim
-        self.attn = attn
         self.resnet_conv_first = nn.ModuleList(
             [
                 nn.Sequential(
@@ -175,7 +164,7 @@ class UpBlock(nn.Module):
         )
         self.up_sample_conv = nn.ConvTranspose2d(in_channels, in_channels, 4, 2, 1) if self.up_sample else nn.Identity()
         
-    def forward(self, x, out_down=None, t_emb=None):
+    def forward(self, x):
         # Upsample
         x = self.up_sample_conv(x)
         

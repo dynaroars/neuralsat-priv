@@ -16,10 +16,10 @@ except ModuleNotFoundError:
 
 class PreLayer(nn.Module):
 
-    def __init__(self):
+    def __init__(self, planes):
         super().__init__()
         # self.bn1 = nn.BatchNorm2d(16)
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=True)
+        self.conv1 = nn.Conv2d(3, planes, kernel_size=3, stride=1, padding=1, bias=True)
         
     def forward(self, x):
         # return F.relu(self.bn1(self.conv1(x)))
@@ -28,10 +28,10 @@ class PreLayer(nn.Module):
 
 class PostLayer(nn.Module):
 
-    def __init__(self, num_classes=10):
+    def __init__(self, dim, num_classes=10):
         super().__init__()
         # self.linear1 = nn.Linear(4096, 64)
-        self.linear2 = nn.Linear(64, num_classes)
+        self.linear2 = nn.Linear(dim, num_classes)
         
     def forward(self, x):
         # x = x.relu()
@@ -47,13 +47,17 @@ class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10, option='B'):
         super(ResNet, self).__init__()
         self.in_planes = 16
-
+        self.planes = 32
+        pre_layer = PreLayer(self.in_planes)
         # layers = [PreLayer()]
-        layers = self._make_layer(block, 16, num_blocks[0], stride=1, expansion=1, option=option)
-        layers[0] = nn.Sequential(PreLayer(), layers[0])
-        layers += self._make_layer(block, 32, num_blocks[1], stride=2, expansion=1, option=option)
-        layers += self._make_layer(block, 64, num_blocks[2], stride=2, expansion=1, option=option)
-        layers[-1] = nn.Sequential(layers[-1], PostLayer(num_classes))
+        assert len(num_blocks)
+        layers = self._make_layer(block, self.planes, num_blocks[0], stride=1, expansion=1, option=option)
+        layers[0] = nn.Sequential(pre_layer, layers[0])
+        if len(num_blocks) > 1:
+            layers += self._make_layer(block, self.planes, num_blocks[1], stride=2, expansion=1, option=option)
+        if len(num_blocks) > 2:
+            layers += self._make_layer(block, self.planes, num_blocks[2], stride=2, expansion=1, option=option)
+        layers[-1] = nn.Sequential(layers[-1], PostLayer(dim=self.planes, num_classes=num_classes))
         
         self.layers = nn.ModuleList(layers)
         self.apply(_weights_init)
@@ -76,6 +80,7 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         for layer in self.layers:
+            print(f'{x.shape=}')
             x = layer(x)
         return x
 
@@ -88,13 +93,27 @@ def resnet20A(*args, **kwargs):
 def resnet20B(*args, **kwargs):
     return ResNet(BasicBlock, [3, 3, 3], 10, 'B')
 
+
 @register_model
-def resnet56B(*args, **kwargs):
-    return ResNet(BasicBlockBN, [9, 9, 9], 10, 'B')
+def resnet13B(*args, **kwargs):
+    return ResNet(BasicBlock, [3, 3], 10, 'B')
+
+@register_model
+def resnet36B(*args, **kwargs):
+    return ResNet(BasicBlock, [6, 6, 6], 10, 'B')
+
+@register_model
+def resnet36BBN(*args, **kwargs):
+    return ResNet(BasicBlockBN, [6, 6, 6], 10, 'B')
+
+
+@register_model
+def resnet_toy(*args, **kwargs):
+    return ResNet(BasicBlock, [1, 1], 10, 'B')
 
 
 if __name__ == "__main__":
-    model = resnet20B()
+    model = resnet36B()
     x = torch.randn(1, 3, 32, 32)
     y = model(x)
     print(model)

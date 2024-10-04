@@ -213,6 +213,7 @@ class NetworkAbstractor:
         self.net.set_bound_opts(get_initialize_opt_params(stop_criterion_func))
 
         # initial bounds
+        print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=}',)
         lb, _, aux_reference_bounds = self.net.init_alpha(
             x=(x,), 
             share_alphas=Settings.share_alphas, 
@@ -454,8 +455,8 @@ class NetworkAbstractor:
         # print(f'Inititial bounds with {method=}:', lb.detach().cpu())
         
         if method == 'backward':
-            # lA, uA, lbias, ubias = self.get_input_A(self.device)
-            # coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+            lA, uA, lbias, ubias = self.get_input_A(self.device)
+            coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
             return (lb, ub), coeffs
 
         # lower bound
@@ -468,7 +469,7 @@ class NetworkAbstractor:
             bound_lower=True,
             bound_upper=False,
         )
-        # lA, _, lbias, _ = self.get_input_A(self.device)
+        lA, _, lbias, _ = self.get_input_A(self.device)
         # print(f'Optimized bounds with {method=}:', lb.detach().cpu())
         
         # upper bound
@@ -481,8 +482,8 @@ class NetworkAbstractor:
             bound_lower=False,
             bound_upper=True,
         )
-        # _, uA, _, ubias = self.get_input_A(self.device)
-        # coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
+        _, uA, _, ubias = self.get_input_A(self.device)
+        coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
         
         return (lb, ub), coeffs
         

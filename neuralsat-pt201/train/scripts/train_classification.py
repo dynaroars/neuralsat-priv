@@ -9,9 +9,9 @@ import torch
 import sys
 import os
 
+from timm.utils import NativeScaler, AverageMeter, random_seed, CheckpointSaver
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.data import create_dataset, create_loader, FastCollateMixup
-from timm.utils import NativeScaler, AverageMeter, random_seed
 from timm.models import model_parameters, create_model
 from timm.scheduler import create_scheduler_v2
 
@@ -155,6 +155,9 @@ def main():
     args = parse_args()
     
     random_seed(args.seed)
+    
+    output_dir = f'{args.save_dir}/{args.output_folder}/{args.output_name}'
+    os.makedirs(output_dir, exist_ok=True)
     
     if args.dataset.endswith('mnist'):
         input_shape = (1, 1, 28, 28)
@@ -323,6 +326,18 @@ def main():
     # print(loss_scaler)
     # exit()
 
+    saver = CheckpointSaver(
+        model=model, 
+        optimizer=optimizer, 
+        args=args, 
+        model_ema=None, 
+        amp_scaler=loss_scaler,
+        checkpoint_dir=output_dir, 
+        recovery_dir=output_dir, 
+        decreasing=False, 
+        max_history=5
+    )
+
     # train
     # print('\n\n[Training]')
     pbar = tqdm(range(num_epochs), desc=f'{model_name}')
@@ -354,12 +369,12 @@ def main():
             # step LR for next epoch
             scheduler.step(epoch + 1, val_acc)
             
-        pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr)
+        best_acc, best_epoch = saver.save_checkpoint(epoch, metric=val_acc)
+        pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr, best_acc=best_acc, best_epoch=best_epoch)
         
     # save
     model.eval()
-    os.makedirs(f'{args.save_dir}/{args.output_folder}/', exist_ok=True)
-    model_save_file = os.path.join(f'{args.save_dir}/{args.output_folder}/', f'{args.output_name}.pt')
+    model_save_file = os.path.join(output_dir, f'{args.output_name}.pt')
     torch.save(model.state_dict(), model_save_file)
     # torch.onnx.export(
     #     model.cpu(),

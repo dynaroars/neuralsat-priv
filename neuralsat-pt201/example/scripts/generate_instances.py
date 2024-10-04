@@ -74,7 +74,7 @@ def main():
     checkpoint_path = os.path.join(args.save_dir, args.model_type, f'{args.model_name}.pt')
     assert os.path.exists(checkpoint_path), f'{checkpoint_path=}'
     model = eval(args.model_name)()
-    # model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+    model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
     model.to(args.device)
     model.eval()
     print(model)
