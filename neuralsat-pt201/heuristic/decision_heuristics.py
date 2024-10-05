@@ -37,6 +37,7 @@ class DecisionHeuristic:
                 abstractor=abstractor, 
                 mode=random.choice(['scale', 'distance', 'polarity']),
             )
+            
         
         if self.input_split:
             if (self.decision_method == 'smart') and (domain_params.lAs is not None):
@@ -60,6 +61,11 @@ class DecisionHeuristic:
             )
         
         # hidden split
+        if self.decision_method == 'brute-force':
+            return self.brute_force_hidden_branching(
+                abstractor=abstractor, 
+                domain_params=domain_params,
+            )
         if self.decision_method != 'smart':
             if random.uniform(0, 1) > 0.7:
                 return self.naive_hidden_branching(
@@ -366,3 +372,34 @@ class DecisionHeuristic:
             decisions.append([l_name, n_id, point])
         
         return decisions
+
+
+    # hidden branching
+    @beartype
+    def brute_force_hidden_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', 
+                                 domain_params: AbstractResults) -> list[list]:
+        print('brute_force_hidden_branching')
+        batch = len(domain_params.input_lowers)
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+        
+        masks = {
+            k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k]) 
+                for k in split_node_points
+        }
+        
+        print(f'{masks=}')
+    
+        # scores = {
+        #     k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) 
+        #         for k in split_node_points
+        # }
+        
+        # masked_scores = {
+        #     k: torch.where(masks[k].bool(), scores[k].flatten(1), 0.0) 
+        #         for k in split_node_points
+        # }
+        
+        
+        
+        raise NotImplementedError

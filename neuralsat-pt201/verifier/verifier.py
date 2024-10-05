@@ -174,6 +174,7 @@ class Verifier:
                             continue
                         else:
                             # raise NotImplementedError
+                            raise
                             logger.debug('[!] RuntimeError exception')
                             return None
                     except SystemExit:
