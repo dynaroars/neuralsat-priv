@@ -53,7 +53,7 @@ def _prune_domains(domain_params: AbstractResults, remaining_indices: torch.Tens
 
 
 @beartype
-def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None) -> tuple[bool, torch.Tensor | None]:
+def _mip_attack(self, reference_bounds: dict | None) -> tuple[bool, torch.Tensor | None]:
     if not Settings.use_attack:
         return False, None
     
@@ -64,7 +64,7 @@ def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None)
     
     
 @beartype
-def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_split: str | None = None) -> tuple:
+def _preprocess(self, objectives: typing.Any, force_split: str | None = None) -> tuple:
     # determine search algorithm
     self.refined_betas = None
     
@@ -98,6 +98,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
         # self._init_abstractor('crown-optimized', objectives)
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
     except:
+        raise
         print('Failed to initialize abstractor')
         return objectives, None
     
@@ -201,12 +202,12 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     return objectives, refined_intermediate_bounds
 
 @beartype
-def _check_timeout(self: verifier.verifier.Verifier, timeout: float) -> bool:
+def _check_timeout(self, timeout: float) -> bool:
     return time.time() - self.start_time > timeout 
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any) -> None:
+def _init_abstractor(self, method: str, objective: typing.Any) -> None:
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -224,7 +225,7 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
     
     
 @beartype
-def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+def _setup_restart(self, nth_restart: int, objective: typing.Any) -> None | dict:
     self.num_restart = nth_restart + 1
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
@@ -287,7 +288,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
 
 
 @beartype
-def _pre_attack(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives, 
+def _pre_attack(self, dnf_objectives: verifier.objective.DnfObjectives, 
                 timeout: float = 2.0) -> tuple[bool, torch.Tensor | None]:
     if Settings.use_attack:
         return Attacker(self.net, dnf_objectives, self.input_shape, device=self.device).run(timeout=timeout)
@@ -301,7 +302,7 @@ def _random_idx(total_samples: int, num_samples: int, device: str = 'cpu') -> to
 
 
 @beartype
-def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, timeout: float,
+def _attack(self, domain_params: AbstractResults, timeout: float,
             n_sample: int = 50, n_interval: int = 1) -> torch.Tensor | None:
     if not Settings.use_attack:
         return None
@@ -363,14 +364,14 @@ def _attack(self: verifier.verifier.Verifier, domain_params: AbstractResults, ti
 
 
 @beartype
-def _get_learned_conflict_clauses(self: verifier.verifier.Verifier) -> dict:
+def _get_learned_conflict_clauses(self) -> dict:
     if hasattr(self.domains_list, 'all_conflict_clauses'):
         return self.domains_list.all_conflict_clauses
     return {}
 
 
 @beartype
-def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: int = 10):
+def _check_invoke_tightening(self, patience_limit: int = 10):
     if not Settings.use_mip_tightening:
         return False
     
@@ -395,7 +396,7 @@ def _check_invoke_tightening(self: verifier.verifier.Verifier, patience_limit: i
     
 
 @beartype
-def _update_tightening_patience(self: verifier.verifier.Verifier, minimum_lowers: float, old_domains_length: int) -> None:
+def _update_tightening_patience(self, minimum_lowers: float, old_domains_length: int) -> None:
     current_domains_length = len(self.domains_list)
     if (minimum_lowers > self.last_minimum_lowers) or (current_domains_length <= self.batch):
         self.tightening_patience -= 1
@@ -412,7 +413,7 @@ def _update_tightening_patience(self: verifier.verifier.Verifier, minimum_lowers
             
     
 @beartype
-def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: AbstractResults) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+def _check_full_assignment(self, domain_params: AbstractResults) -> tuple[torch.Tensor | None, torch.Tensor | None]:
     if self.input_split:
         return None, None
     
@@ -468,7 +469,7 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
 
     
 @beartype
-def compute_stability(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives) -> tuple[int, int, list, list]:
+def compute_stability(self, dnf_objectives: verifier.objective.DnfObjectives) -> tuple[int, int, list, list]:
     if not (hasattr(self, 'abstractor')):
         self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
         
@@ -476,7 +477,7 @@ def compute_stability(self: verifier.verifier.Verifier, dnf_objectives: verifier
 
         
 @beartype
-def _save_stats(self: verifier.verifier.Verifier) -> None:
+def _save_stats(self) -> None:
     for k, v in self._get_learned_conflict_clauses().items():
         if k not in self.all_conflict_clauses:
             self.all_conflict_clauses[k] = []
@@ -486,7 +487,7 @@ def _save_stats(self: verifier.verifier.Verifier) -> None:
         
         
 @beartype
-def get_stats(self: verifier.verifier.Verifier) -> tuple[int, int]:
+def get_stats(self) -> tuple[int, int]:
     depths = {}
     for k, v in self.all_conflict_clauses.items():
         depths[k] = max(map(lambda x: sum(len(_[0]) for _ in x.values()), v)) if len(v) else 0
@@ -495,7 +496,7 @@ def get_stats(self: verifier.verifier.Verifier) -> tuple[int, int]:
 
 
 @beartype
-def _check_adv_f64(self: verifier.verifier.Verifier, adv: torch.Tensor, objective: typing.Any) -> bool:
+def _check_adv_f64(self, adv: torch.Tensor, objective: typing.Any) -> bool:
     lower_bounds_f64 = objective.lower_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
     upper_bounds_f64 = objective.upper_bounds_f64.view(-1, *self.input_shape[1:]).to(self.device)
     cs_f64 = objective.cs_f64.to(self.device)
@@ -507,7 +508,7 @@ def _check_adv_f64(self: verifier.verifier.Verifier, adv: torch.Tensor, objectiv
 
 
 @beartype
-def get_unsat_core(self: verifier.verifier.Verifier) -> None | dict:
+def get_unsat_core(self) -> None | dict:
     if self.status != ReturnStatus.UNSAT:
         return None
     
