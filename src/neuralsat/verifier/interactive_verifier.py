@@ -5,6 +5,7 @@ from beartype import beartype
 import torch
 import copy
 
+from ..heuristic.decision_heuristics import DecisionHeuristic
 from ..auto_LiRPA.utils import stop_criterion_batch_any
 from ..onnx2pytorch.convert.model import ConvertModel
 from ..heuristic.domains_list import DomainsList
@@ -24,6 +25,12 @@ class InteractiveVerifier:
         # hyper parameters
         self.input_split = False
         self.batch = max(batch, 1)
+        
+        self.scorer = DecisionHeuristic(
+            input_split=self.input_split,
+            decision_topk=-1,
+            decision_method='greedy'
+        )
 
 
     # @beartype
@@ -58,10 +65,9 @@ class InteractiveVerifier:
         )
 
 
-    def decide(self):
-        pick_ret = self.domains_list.pick_out(self.batch, self.device)
-        decisions = self.decision(self.abstractor, pick_ret)
-        return (decisions, pick_ret), None
+    def decide(self, observation, domain_params):
+        decisions = self.decision(self.abstractor, domain_params)
+        return (decisions, domain_params), None
 
 
     def init(self: 'InteractiveVerifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
@@ -72,17 +78,31 @@ class InteractiveVerifier:
             reference_bounds=reference_bounds,
         )
         return len(self.domains_list) == 0
+    
+    
+    def get_observation(self, batch):
+        pick_ret = self.domains_list.pick_out(batch, self.device)
+        
+        obs = self.scorer.get_branching_scores(
+            abstractor=self.abstractor,
+            domain_params=pick_ret,
+        )
+        return obs, pick_ret
 
     def step(self, action):
-        obs = reward = None
         decisions, pick_ret = action
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         self.domains_list.add(abstraction_ret, decisions)
         done = len(self.domains_list) == 0
-        info = (
-            self.domains_list.minimum_lowers,
-            self.domains_list.visited,
-        )
-        return obs, reward, done, info
+        
+        info = {
+            'worst_bound': self.domains_list.minimum_lowers,
+            'visited': self.domains_list.visited,
+            'remaining': len(self.domains_list),
+        }
+        
+        reward = self.domains_list.minimum_lowers
+        
+        return reward, done, info
 
     from .utils import _preprocess, _init_abstractor, _setup_restart

@@ -62,11 +62,12 @@ class DecisionHeuristic:
             )
 
         # hidden split
-        if self.decision_method == 'brute-force':
+        if self.decision_method == 'greedy':
             return self.brute_force_hidden_branching(
                 abstractor=abstractor,
                 domain_params=domain_params,
             )
+            
         if self.decision_method != 'smart':
             if random.uniform(0, 1) > 0.7:
                 return self.naive_hidden_branching(
@@ -547,9 +548,20 @@ class DecisionHeuristic:
 
 
         final_decisions = sum(final_decisions, [])
-        # print(f'{final_decisions=}')
-        # exit()
+        return final_decisions
 
+
+
+    def get_branching_scores(self, abstractor, domain_params) -> list[list]:
+        batch = len(domain_params.input_lowers)
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+
+        masks = {
+            k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
+                for k in split_node_points
+        }
+    
         # features
         scores_1, scores_2 = _compute_babsr_scores(
             abstractor=abstractor,
@@ -563,18 +575,23 @@ class DecisionHeuristic:
         )
         scores_1 = {split_node_names[i]: scores_1[i] for i in range(len(scores_1))}
         scores_2 = {split_node_names[i]: scores_2[i] for i in range(len(scores_1))}
-        scores_3 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) for k in split_node_points}
-        scores_4 = {k: (domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k]) for k in split_node_points}
-        scores_5 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) for k in split_node_points}
-        scores_6 = {k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) for k in split_node_points}
+        scores_3 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) for k in split_node_names}
+        scores_4 = {k: (domain_params.upper_bounds[k] * domain_params.lower_bounds[k]) / (domain_params.lower_bounds[k] - domain_params.upper_bounds[k]) for k in split_node_names}
+        scores_5 = {k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k]) / torch.abs(domain_params.upper_bounds[k] + domain_params.lower_bounds[k]) for k in split_node_names}
+        scores_6 = {k: torch.abs(domain_params.upper_bounds[k] - domain_params.lower_bounds[k]) for k in split_node_names}
 
-        print(len(topk_decisions))
-        assert len(topk_decisions) == topk
-        assert len(topk_decisions[0]) == batch
-        for ds in topk_decisions:
-            for b in range(batch):
-                layer_name, neuron_idx, _ = ds[b]
-                print(scores_1[layer_name][b][neuron_idx])
-            exit()
-
-        return final_decisions
+        scores_all_dict = {
+            k: torch.stack([
+                scores_1[k],
+                scores_2[k],
+                scores_3[k],
+                scores_4[k],
+                scores_5[k],
+                scores_6[k],
+            ], dim=-1) 
+            for k in split_node_names
+        }
+        
+        scores_all_list = [scores_all_dict[k] for k in split_node_names]
+        masks_all_list = [masks[k] for k in split_node_names]
+        return scores_all_list, masks_all_list
