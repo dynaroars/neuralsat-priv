@@ -10,4 +10,5 @@ upload:
 	twine upload dist/*
 
 backup:
-	push
+	git commit -am 'x'
+	git push origin heuristic
