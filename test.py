@@ -37,11 +37,19 @@ if __name__ == "__main__":
         reference_bounds=None,
         preconditions={},
     )
+    
+    
+    name_dict = {
+        i: node.name for i, node in enumerate(env.abstractor.net.split_nodes)
+    }
+    
+    print(f'{name_dict=}')
 
     while not done:
         observation, subproblems = env.get_observation(batch)
         action, _state = env.decide(observation, subproblems)
         reward, done, info = env.step(action)
+        print(action[0])
         for i in range(len(observation)):
             for j in range(len(observation[i])):
                 print(f'observation[{i=}][{j=}]={observation[i][j].shape}')
