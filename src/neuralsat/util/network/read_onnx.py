@@ -92,9 +92,9 @@ def _parse_onnx(path: str) -> tuple:
         batch = 2
         dummy = torch.randn(batch, *batched_input_shape[1:], dtype=torch.get_default_dtype())
         # print(dummy.shape)
-        output_onnx = torch.cat([torch.from_numpy(inference_onnx(path, dummy[i].view(orig_input_shape).float().numpy())[0]).view(batched_output_shape) for i in range(batch)])
+        output_onnx = torch.cat([torch.from_numpy(inference_onnx(path, dummy[i].view(orig_input_shape).cpu().detach().float().numpy())[0]).view(batched_output_shape) for i in range(batch)])
         # print('output_onnx:', output_onnx)
-        output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
+        output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).cpu().detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
     except:
