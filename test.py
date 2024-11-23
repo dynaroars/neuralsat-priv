@@ -50,7 +50,12 @@ if __name__ == "__main__":
         action, _state = env.decide(observation, subproblems)
         reward, done, info = env.step(action)
         print(action[0])
-        for i in range(len(observation)):
-            for j in range(len(observation[i])):
-                print(f'observation[{i=}][{j=}]={observation[i][j].shape}')
+        # for i in range(len(observation)):
+        #     for j in range(len(observation[i])):
+        #         print(f'observation[{i=}][{j=}]={observation[i][j].shape}')
+        
+        # (topk, batch)
+        all_rewards, all_decisions = env.get_rewards(subproblems)
+        print(f'{all_rewards.shape=}')
+        print(f'{all_decisions=}')
         exit()

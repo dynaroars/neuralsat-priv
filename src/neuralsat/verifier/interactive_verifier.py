@@ -87,7 +87,17 @@ class InteractiveVerifier:
             abstractor=self.abstractor,
             domain_params=pick_ret,
         )
+        # topk_output_lbs: (topk, batch)
+        # topk_decisions: (topk, batch)
         return obs, pick_ret
+    
+    def get_rewards(self, pick_ret):
+        topk_output_lbs, topk_decisions = self.scorer.get_all_branching_rewards(
+            abstractor=self.abstractor,
+            domain_params=pick_ret,
+        )
+        return topk_output_lbs, topk_decisions
+        
 
     def step(self, action):
         decisions, pick_ret = action

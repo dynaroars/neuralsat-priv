@@ -217,6 +217,7 @@ class DecisionHeuristic:
             for idx, value in zip(topk_scores_indices[:, k], topk_scores_values[:, k]):
                 if value == 0.0:
                     decision_candidates.append(topk_decisions[0][0])
+                    print(idx)
                     continue
                 idx = idx.item()
                 layer_idx = np.searchsorted(score_length, idx, side='right') - 1
@@ -460,6 +461,60 @@ class DecisionHeuristic:
         return decisions
 
 
+    def get_all_branching_rewards(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
+                                 domain_params: AbstractResults) -> list[list]:
+        print('get_all_branching_rewards')
+        batch = len(domain_params.input_lowers)
+        split_node_names = [_.name for _ in abstractor.net.split_nodes]
+        split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
+
+        masks = {
+            k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
+                for k in split_node_points
+        }
+
+        # print(f'{masks=}')
+        n_unstables = sum([v.flatten(1).sum(1) for v in masks.values()])
+        assert len(n_unstables) == batch
+        topk = int(n_unstables.amax().item())
+        topk = topk if self.decision_topk == -1 else max(topk, self.decision_topk)
+        # print(f'{topk=} {self.decision_topk=}')
+        # print(f'{split_node_names=}')
+        # topk = 10
+
+        raw_scores = {
+            k: torch.min(domain_params.upper_bounds[k], -domain_params.lower_bounds[k])
+                for k in split_node_points
+        }
+
+        masked_scores = {
+            k: masks[k] * raw_scores[k].flatten(1)
+                for k in split_node_points
+        }
+        
+        # print([s.shape for s in masked_scores.values()])
+        scores = [masked_scores[name] for name in split_node_names]
+        
+        # convert an index to its layer and offset
+        score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
+
+        # top-k candidates
+        topk_scores = torch.topk(torch.cat(scores, dim=1), topk)
+
+        topk_output_lbs, topk_decisions = self.get_topk_scores_greedy(
+            abstractor=abstractor,
+            domain_params=domain_params,
+            topk_scores=topk_scores,
+            score_length=score_length,
+            topk=topk,
+        )
+        # print(f'{batch=}')
+        # print(len(topk_output_lbs))
+        # print(topk_output_lbs)
+        # print(len(topk_decisions))
+        # print(topk_decisions)
+        return topk_output_lbs, topk_decisions
+        
     # hidden branching
     # @beartype
     def brute_force_hidden_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
