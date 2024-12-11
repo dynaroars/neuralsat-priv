@@ -179,7 +179,7 @@ class DecisionHeuristic:
 
     # @beartype
     def get_topk_scores_greedy(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor', domain_params: AbstractResults,
-                        topk_scores: torch.return_types.topk, score_length: np.ndarray, topk: int) -> tuple[torch.Tensor, list]:
+                        topk_scores: torch.return_types.topk, score_length: np.ndarray, topk: int, reduce_op=torch.max) -> tuple[torch.Tensor, list]:
         topk_decisions = []
         batch = len(domain_params.input_lowers)
         topk_output_lbs = torch.empty(
@@ -255,7 +255,7 @@ class DecisionHeuristic:
             # invalid scores for stable neurons
             # invalid_mask_scores = (topk_scores.values[:, k] <= SMALL).to(torch.get_default_dtype())
             # print(f'{invalid_mask_scores.sum()=}')
-            topk_output_lbs[k] = self.decision_reduceop((k_output_lbs.flatten()).reshape(2, -1), dim=0).values
+            topk_output_lbs[k] = reduce_op((k_output_lbs.flatten()).reshape(2, -1), dim=0).values
 
         return topk_output_lbs, topk_decisions
 
@@ -462,7 +462,7 @@ class DecisionHeuristic:
 
 
     def get_all_branching_rewards(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
-                                 domain_params: AbstractResults) -> list[list]:
+                                 domain_params: AbstractResults, reduce_op=torch.max) -> list[list]:
         print('get_all_branching_rewards')
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in abstractor.net.split_nodes]
@@ -507,6 +507,7 @@ class DecisionHeuristic:
             topk_scores=topk_scores,
             score_length=score_length,
             topk=topk,
+            reduce_op=reduce_op,
         )
         # print(f'{batch=}')
         # print(len(topk_output_lbs))

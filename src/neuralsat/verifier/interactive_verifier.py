@@ -91,10 +91,11 @@ class InteractiveVerifier:
         # topk_decisions: (topk, batch)
         return obs, pick_ret
     
-    def get_rewards(self, pick_ret):
+    def get_rewards(self, pick_ret, reduce_op=torch.max):
         topk_output_lbs, topk_decisions = self.scorer.get_all_branching_rewards(
             abstractor=self.abstractor,
             domain_params=pick_ret,
+            reduce_op=reduce_op,
         )
         return topk_output_lbs, topk_decisions
         
