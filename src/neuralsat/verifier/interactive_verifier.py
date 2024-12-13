@@ -99,7 +99,6 @@ class InteractiveVerifier:
         )
         return topk_output_lbs, topk_decisions
 
-
     def step(self, action):
         decisions, pick_ret = action
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
@@ -115,9 +114,9 @@ class InteractiveVerifier:
         # reward = self.domains_list.minimum_lowers
         # given action (selected neuron)
         # return minimum lowerbound on two branches of that neuron
-        reward = abstraction_ret.output_lbs
-        print(reward.shape)
-        exit()
+        reward = abstraction_ret.output_lbs.min(dim=-1).values
+        r1, r2 = torch.chunk(reward, 2)
+        reward = torch.minimum(r1, r2)
 
         return reward, done, info
 
