@@ -5,7 +5,6 @@ import numpy as np
 import typing
 import random
 import torch
-import tqdm
 import os
 
 if typing.TYPE_CHECKING:
@@ -67,7 +66,7 @@ class DecisionHeuristic:
                 abstractor=abstractor,
                 domain_params=domain_params,
             )
-            
+
         if self.decision_method != 'smart':
             if random.uniform(0, 1) > 0.7:
                 return self.naive_hidden_branching(
@@ -211,7 +210,7 @@ class DecisionHeuristic:
         topk_scores_indices = topk_scores.indices.cpu()
         topk_scores_values = topk_scores.values.cpu()
 
-        for k in tqdm.tqdm(range(topk)):
+        for k in range(topk):
             # top-k candidates from scores
             decision_candidates = [] # higher is better
             for idx, value in zip(topk_scores_indices[:, k], topk_scores_values[:, k]):
@@ -491,10 +490,10 @@ class DecisionHeuristic:
             k: masks[k] * raw_scores[k].flatten(1)
                 for k in split_node_points
         }
-        
+
         # print([s.shape for s in masked_scores.values()])
         scores = [masked_scores[name] for name in split_node_names]
-        
+
         # convert an index to its layer and offset
         score_length = np.insert(np.cumsum([len(scores[i][0]) for i in range(len(scores))]), 0, 0)
 
@@ -515,7 +514,7 @@ class DecisionHeuristic:
         # print(len(topk_decisions))
         # print(topk_decisions)
         return topk_output_lbs, topk_decisions
-        
+
     # hidden branching
     # @beartype
     def brute_force_hidden_branching(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
@@ -617,7 +616,7 @@ class DecisionHeuristic:
             k: domain_params.masks[k] if (split_node_points[k] is not None) else torch.ones_like(domain_params.masks[k])
                 for k in split_node_points
         }
-    
+
         # features
         scores_1, scores_2 = _compute_babsr_scores(
             abstractor=abstractor,
@@ -644,10 +643,10 @@ class DecisionHeuristic:
                 scores_4[k],
                 scores_5[k],
                 scores_6[k],
-            ], dim=-1) 
+            ], dim=-1)
             for k in split_node_names
         }
-        
+
         scores_all_list = [scores_all_dict[k] for k in split_node_names]
         masks_all_list = [masks[k] for k in split_node_names]
         return scores_all_list, masks_all_list
