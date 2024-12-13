@@ -25,7 +25,7 @@ class InteractiveVerifier:
         # hyper parameters
         self.input_split = False
         self.batch = max(batch, 1)
-        
+
         self.scorer = DecisionHeuristic(
             input_split=self.input_split,
             decision_topk=-1,
@@ -78,11 +78,11 @@ class InteractiveVerifier:
             reference_bounds=reference_bounds,
         )
         return len(self.domains_list) == 0
-    
-    
+
+
     def get_observation(self, batch):
         pick_ret = self.domains_list.pick_out(batch, self.device)
-        
+
         obs = self.scorer.get_branching_scores(
             abstractor=self.abstractor,
             domain_params=pick_ret,
@@ -90,7 +90,7 @@ class InteractiveVerifier:
         # topk_output_lbs: (topk, batch)
         # topk_decisions: (topk, batch)
         return obs, pick_ret
-    
+
     def get_rewards(self, pick_ret, reduce_op=torch.max):
         topk_output_lbs, topk_decisions = self.scorer.get_all_branching_rewards(
             abstractor=self.abstractor,
@@ -98,22 +98,22 @@ class InteractiveVerifier:
             reduce_op=reduce_op,
         )
         return topk_output_lbs, topk_decisions
-        
+
 
     def step(self, action):
         decisions, pick_ret = action
         abstraction_ret = self.abstractor.forward(decisions, pick_ret)
         self.domains_list.add(abstraction_ret, decisions)
         done = len(self.domains_list) == 0
-        
+
         info = {
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
             'remaining': len(self.domains_list),
         }
-        
+
         reward = self.domains_list.minimum_lowers
-        
+
         return reward, done, info
 
     from .utils import _preprocess, _init_abstractor, _setup_restart

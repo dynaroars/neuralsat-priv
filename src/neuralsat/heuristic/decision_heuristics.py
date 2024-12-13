@@ -462,7 +462,7 @@ class DecisionHeuristic:
 
     def get_all_branching_rewards(self: 'DecisionHeuristic', abstractor: 'abstractor.abstractor.NetworkAbstractor',
                                  domain_params: AbstractResults, reduce_op=torch.max) -> list[list]:
-        print('get_all_branching_rewards')
+        # print('get_all_branching_rewards')
         batch = len(domain_params.input_lowers)
         split_node_names = [_.name for _ in abstractor.net.split_nodes]
         split_node_points = {k: abstractor.net.split_activations[k][0][0].get_split_point() for k in split_node_names}
