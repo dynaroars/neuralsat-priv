@@ -112,7 +112,12 @@ class InteractiveVerifier:
             'remaining': len(self.domains_list),
         }
 
-        reward = self.domains_list.minimum_lowers
+        # reward = self.domains_list.minimum_lowers
+        # given action (selected neuron)
+        # return minimum lowerbound on two branches of that neuron
+        reward = abstraction_ret.output_lbs
+        print(reward.shape)
+        exit()
 
         return reward, done, info
 

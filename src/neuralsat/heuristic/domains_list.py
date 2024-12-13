@@ -317,10 +317,18 @@ class DomainsList:
 
     # @beartype
     @property
-    def minimum_lowers(self: 'DomainsList') -> float:
+    def minimum_uppers(self: 'DomainsList') -> float:
         indices = (self.all_output_lowers - self.all_rhs).max(dim=1)[0].argsort()
         if len(indices):
             return (self.all_output_lowers[indices[0]] - self.all_rhs[indices[0]]).max().detach().item()
+        return 1e-6
+
+    # @beartype
+    @property
+    def minimum_lowers(self: 'DomainsList') -> float:
+        indices = (self.all_output_lowers - self.all_rhs).min(dim=1)[0].argsort()
+        if len(indices):
+            return (self.all_output_lowers[indices[0]] - self.all_rhs[indices[0]]).min().detach().item()
         return 1e-6
 
 
