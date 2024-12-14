@@ -11,11 +11,22 @@ import math
 import os
 
 from ..auto_LiRPA.utils import stop_criterion_batch_any
-from ..auto_LiRPA import BoundedModule
 from ..onnx2pytorch.convert.model import ConvertModel
 from ..util.misc.result import AbstractResults
+from ..auto_LiRPA import BoundedModule
 from ..util.misc.logger import logger
 from .params import *
+
+# @beartype
+def compute_masks(lower_bounds: dict, upper_bounds: dict, device: str, non_blocking: bool = True) -> dict:
+    # TODO: shifted relu should not use 0.0, e.g., max(x, 1.0)
+    new_masks = {
+        j: torch.logical_and(
+                    lower_bounds[j] < 0,
+                    upper_bounds[j] > 0).flatten(start_dim=1).to(torch.get_default_dtype()).to(device=device, non_blocking=non_blocking)
+        for j in lower_bounds
+    }
+    return new_masks
 
 
 class NetworkAbstractor:
@@ -320,6 +331,10 @@ class NetworkAbstractor:
             double_betas = self.get_beta(num_splits)
             # hidden bounds
             double_lower_bounds, double_upper_bounds = self.get_hidden_bounds(double_output_lbs)
+            # mask
+            double_masks = compute_masks(lower_bounds=double_lower_bounds,
+                                         upper_bounds=double_upper_bounds,
+                                         device=self.device)
 
         assert all([_.shape[0] == 2 * batch for _ in double_lower_bounds.values()]), print([_.shape for _ in double_lower_bounds.values()])
         assert all([_.shape[0] == 2 * batch for _ in double_upper_bounds.values()]), print([_.shape for _ in double_upper_bounds.values()])
@@ -340,6 +355,7 @@ class NetworkAbstractor:
             'cs': double_cs,
             'rhs': double_rhs,
             'sat_solvers': double_sat_solvers,
+            'masks': double_masks,
         })
 
 
@@ -384,7 +400,7 @@ class NetworkAbstractor:
         with torch.no_grad():
             # slopes
             double_slopes = self.get_slope() if len(domain_params.slopes) > 0 else {}
-            double_lAs = self.get_lAs(size=len(new_input_lowers))
+            double_lAs    = self.get_lAs(size=len(new_input_lowers))
 
         return AbstractResults(**{
             'objective_ids': double_objective_ids,

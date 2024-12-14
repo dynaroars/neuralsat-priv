@@ -109,6 +109,8 @@ class InteractiveVerifier:
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
             'remaining': len(self.domains_list),
+            'pick_ret': pick_ret, # subproblem before
+            'abstraction_ret': abstraction_ret, # subproblem after
         }
 
         # reward = self.domains_list.minimum_lowers
@@ -118,6 +120,10 @@ class InteractiveVerifier:
         r1, r2 = torch.chunk(reward, 2)
         reward = torch.minimum(r1, r2)
 
-        return reward, done, info
+        #
+        split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
+                                                             domain_params=abstraction_ret)
+
+        return split_observation, reward, done, info
 
     from .utils import _preprocess, _init_abstractor, _setup_restart
