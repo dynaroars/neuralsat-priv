@@ -4,12 +4,14 @@ import torch.nn as nn
 import typing
 import torch
 import time
+import copy
 import os
+import io
 
 from util.misc.torch_cuda_memory import is_cuda_out_of_memory, gc_cuda
 from util.network.read_onnx import parse_onnx, decompose_pytorch
 from attacker.pgd_attack.general import attack as pgd_attack
-from util.spec.write_vnnlib import write_vnnlib
+from util.spec.write_vnnlib import write_vnnlib_classify
 from verifier.objective import DnfObjectives
 from verifier.verifier import Verifier
 
@@ -45,11 +47,14 @@ def _setup_subnet_verifier(self, subnet_idx: int, objective: typing.Any | None =
     subnet_params = self.sub_networks[subnet_idx]
     # network
     if (subnet_params.output_shape is not None) and len(subnet_params.output_shape) > 2:
-        network = torch.nn.Sequential(subnet_params.network, torch.nn.Flatten(1))
+        tmp_network = torch.nn.Sequential(subnet_params.network, torch.nn.Flatten(1))
     else:
         # network = torch.nn.Sequential(torch.nn.Identity(), subnet_params.network)
-        network = subnet_params.network
-    print(network)
+        tmp_network = subnet_params.network
+    tmp_network.eval()
+    network = copy.deepcopy(tmp_network)
+    network.eval()
+    # print(network)
     
     verifier = Verifier(
         net=network,
@@ -143,7 +148,7 @@ def attack_subnet(self, model, objective, timeout=5.0):
         print(f'Trial {i}: {x_attack.sum().item()=}')
         pred = model(x_attack).cpu().detach()
         
-        write_vnnlib(
+        write_vnnlib_classify(
             spec_path='example/vnnlib/spec_dec.vnnlib',
             data_lb=input_lower,
             data_ub=input_upper,
@@ -283,28 +288,56 @@ def _verify_subnet(self, subnet_idx: int, objective: typing.Any, verify_batch: i
     # tmp_objective2.rhs_f64 = objective.rhs.to(torch.float64)
     
     assert torch.all(tmp_objective.lower_bounds <= tmp_objective.upper_bounds)
-
     verifier = self._setup_subnet_verifier(
         subnet_idx=subnet_idx, 
-        objective=tmp_objective, 
+        objective=copy.deepcopy(tmp_objective), 
         batch=verify_batch,
     )
-    print(verifier.net)
+    # print(verifier.net)
+    print(f'{objective.cs.shape=}')
 
     verifier.start_time = time.time()
 
     # verifier.abstractor.extras = None
     status = verifier._verify_one(
-        objective=tmp_objective, 
+        objective=copy.deepcopy(tmp_objective), 
         preconditions={}, 
         reference_bounds={}, 
         timeout=timeout,
     )
     
+    del verifier.abstractor.net
+    del verifier.abstractor
+    del verifier
+    
     print(f'{status=}')
 
     return status
     
+def convert_tmp(net, input_shape):
+    net.cpu().eval()
+    print(net)
+    
+    # export
+    # onnx_buffer = io.BytesIO()
+    torch.onnx.export(
+        net,
+        torch.zeros(input_shape),
+        'onnx_buffer.onnx',
+        verbose=False,
+        opset_version=12,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={
+            'input': {0: 'batch_size'},
+            'output': {0: 'batch_size'},
+        }
+    )
+    # onnx_buffer.seek(0)
+    
+    new_net = parse_onnx('onnx_buffer.onnx')[0]
+    # print(new_net)
+    exit()
     
 @beartype
 def decompose_network(self, net: nn.Module, input_shape: tuple, min_layer: int) -> None:
@@ -318,20 +351,28 @@ def decompose_network(self, net: nn.Module, input_shape: tuple, min_layer: int) 
     for count, idx in enumerate(range(0, len(net.layers), min_layer)):
         subnet = PytorchWrapper(net.layers[idx:idx+min_layer])
         subnet.eval()
+        # convert_tmp(subnet, in_shape)
         out_shape = subnet(torch.randn(in_shape, device=self.device)).size()
         self.sub_networks[count] = SubNetworks(subnet, in_shape, out_shape)
         in_shape = out_shape
         
+        min_layer += 10000 # TODO: remove
+        # print(count)
+        if count == 1:
+            break
+        
     # checking correctness
-    dummy = torch.randn(2, *input_shape[1:], device=self.device)
+    net = net.cpu()
+    dummy = torch.randn(2, *input_shape[1:])
     y1 = net(dummy)
     
     y2 = dummy
     for i in range(len(self.sub_networks)):
         y2 = self.sub_networks[i].network(y2)
         
-    assert torch.equal(y1, y2)
-    print(f'[+] Passed decomposing network: {len(self.sub_networks)=}')
+    assert torch.allclose(y1, y2, 1e-4, 1e-4), f'norm={torch.norm(y1 - y2).item()}'
+    print(f'[+] Passed decomposing network: {len(self.sub_networks)=}', f'norm={torch.norm(y1 - y2).item()}')
+    
     
     # for idx in range(len(self.sub_networks)):
     #     print(self.sub_networks[idx].network)

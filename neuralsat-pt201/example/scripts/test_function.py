@@ -14,12 +14,19 @@ from util.misc.logger import logger
 from setting import Settings
 
 
+def disable_batchnorm_tracking(model):
+    for module in model.modules():
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            module.track_running_stats = False
+            
 def extract_instance(net_path, vnnlib_path):
     vnnlibs = read_vnnlib(vnnlib_path)
     pytorch_path = net_path[:-5] + '.pth'
     if os.path.exists(pytorch_path):
         print(f'Loading {pytorch_path=}')
         model = torch.load(pytorch_path)
+        # disable_batchnorm_tracking(model)
+        # print(model)
         input_shape = (1, 3, 32, 32)
         is_nhwc = False
     else:

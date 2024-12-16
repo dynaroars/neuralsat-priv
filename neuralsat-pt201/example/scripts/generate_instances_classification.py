@@ -1,21 +1,32 @@
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+import onnxruntime as ort
 from tqdm import tqdm
+import numpy as np
 import torchvision
 import argparse
 import torch
+import onnx
 import sys
 import os
 
-from util.spec.write_vnnlib import write_vnnlib
-from train.models.vit.vit import *
+from util.spec.write_vnnlib import write_vnnlib_classify
 from train.models.resnet.resnet import *
+from train.models.vit.vit import *
+
+# from train.timm.models import load_checkpoint
 
 
 def get_model_params(model):
     total_params = sum(p.numel() for p in model.parameters())
     return total_params
 
+def inference_onnx(path: str, *inputs: np.ndarray):
+    print('Infer:', path)
+    sess = ort.InferenceSession(onnx.load(path).SerializeToString())
+    names = [i.name for i in sess.get_inputs()]
+    print(f'{names=}')
+    return sess.run(None, dict(zip(names, inputs)))
 
 @torch.no_grad()
 def test(test_loader, model, device='cpu'):
@@ -40,6 +51,7 @@ def parse_args():
     parser.add_argument('--data_root', default='train/data')
     parser.add_argument('--save_dir', default='train/weights')
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--epoch', type=int)
     parser.add_argument('--seed', type=int, default=36)
     parser.add_argument('--eps', type=float, default=0.01)
     parser.add_argument('--timeout', type=float, default=1000.0)
@@ -48,6 +60,7 @@ def parse_args():
     # args.device = torch.device(args.device)
     return args
 
+@torch.no_grad()
 def main():
     args = parse_args()
     torch.manual_seed(args.seed)
@@ -71,14 +84,30 @@ def main():
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
     
     # network
-    checkpoint_path = os.path.join(args.save_dir, args.model_type, f'{args.model_name}.pt')
+    if not args.epoch:
+        checkpoint_path = os.path.join(args.save_dir, args.model_type, args.model_name, f'model_best.pth.tar')
+    else:
+        checkpoint_path = os.path.join(args.save_dir, args.model_type, args.model_name, f'checkpoint-{args.epoch}.pth.tar')
+        
     assert os.path.exists(checkpoint_path), f'{checkpoint_path=}'
     model = eval(args.model_name)()
-    model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+    print(model)
+    state_dict = torch.load(checkpoint_path, weights_only=False)
+    model.load_state_dict(state_dict['state_dict'])
     model.to(args.device)
     model.eval()
-    print(model)
-    print(model(torch.ones(1, 3, 32, 32).to(args.device)))
+
+    # model = nn.Sequential(*model.layers[:4])
+    # print(model)
+    # model.eval()
+    
+    # acc = test(
+    #     test_loader=dataloader, 
+    #     model=model, 
+    #     device=args.device,
+    # )
+    # print('Accuracy:', acc)
+    # exit()
 
     print('[+] Exporting ONNX')
     torch.onnx.export(
@@ -93,6 +122,14 @@ def main():
             'output': {0: 'batch_size'},
         }
     )
+    
+    dummy = torch.randn(10, 3, 32, 32).to(args.device)
+    y1 = model(dummy)
+    y2 = torch.from_numpy(inference_onnx(f'{net_dir}/{args.model_name}.onnx', dummy.detach().cpu().numpy())[0]).to(args.device)
+    diff = torch.norm(y1 - y2)
+    print(f'{diff=}')
+    if diff > 1e-4:
+        exit()
     
     print('[+] Exporting Pytorch')
     torch.save(model, f"{net_dir}/{args.model_name}.pth")
@@ -133,7 +170,7 @@ def main():
             data_lb = x - args.eps / 2
             data_ub = x + args.eps / 2
             spec_name = f'spec_idx_{i}_net_{args.model_name}_eps_{args.eps:.06f}_seed_{args.seed}.vnnlib'
-            write_vnnlib(
+            write_vnnlib_classify(
                 spec_path=f'{spec_dir}/{spec_name}',
                 data_lb=data_lb,
                 data_ub=data_ub,

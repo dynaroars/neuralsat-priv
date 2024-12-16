@@ -76,7 +76,7 @@ def train(epoch, train_loader, model, criterion, optimizer, loss_scaler, schedul
             loss_scaler(
                 loss, 
                 optimizer,
-                clip_grad=None, 
+                clip_grad=0.1, 
                 clip_mode='norm',
                 parameters=model_parameters(model, exclude_head='agc' in 'norm'),
                 create_graph=second_order)
@@ -145,6 +145,7 @@ def parse_args():
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--infer', action='store_true')
     parser.add_argument('--adv_train', action='store_true')
+    parser.add_argument('--saver', action='store_true')
 
     args = parser.parse_args()
     # args.device = torch.device(args.device)
@@ -325,18 +326,20 @@ def main():
     amp_autocast = torch.amp.autocast(args.device)
     # print(loss_scaler)
     # exit()
-
-    saver = CheckpointSaver(
-        model=model, 
-        optimizer=optimizer, 
-        args=args, 
-        model_ema=None, 
-        amp_scaler=loss_scaler,
-        checkpoint_dir=output_dir, 
-        recovery_dir=output_dir, 
-        decreasing=False, 
-        max_history=5
-    )
+    if args.saver:
+        saver = CheckpointSaver(
+            model=model, 
+            optimizer=optimizer, 
+            args=args, 
+            model_ema=None, 
+            amp_scaler=loss_scaler,
+            checkpoint_dir=output_dir, 
+            recovery_dir=output_dir, 
+            decreasing=False, 
+            max_history=5
+        )
+    else:
+        saver = None
 
     # train
     # print('\n\n[Training]')
@@ -368,9 +371,12 @@ def main():
         if scheduler is not None:
             # step LR for next epoch
             scheduler.step(epoch + 1, val_acc)
-            
-        best_acc, best_epoch = saver.save_checkpoint(epoch, metric=val_acc)
-        pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr, best_acc=best_acc, best_epoch=best_epoch)
+        
+        if saver:
+            best_acc, best_epoch = saver.save_checkpoint(epoch, metric=val_acc)
+            pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr, best_acc=best_acc, best_epoch=best_epoch)
+        else:
+            pbar.set_postfix(loss=train_loss, acc=val_acc, lr=lr)
         
     # save
     model.eval()

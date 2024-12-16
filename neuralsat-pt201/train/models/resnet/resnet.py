@@ -23,8 +23,8 @@ class PreLayer(nn.Module):
         
     def forward(self, x):
         # return F.relu(self.bn1(self.conv1(x)))
-        return F.relu(self.conv1(x))
-        # return self.conv1(x)
+        # return F.relu(self.conv1(x))
+        return self.conv1(x)
 
 class PostLayer(nn.Module):
 
@@ -80,40 +80,52 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         for layer in self.layers:
-            print(f'{x.shape=}')
+            # print(f'{x.shape=}')
             x = layer(x)
         return x
 
-
 @register_model
-def resnet20A(*args, **kwargs):
-    return ResNet(BasicBlock, [3, 3, 3], 10, 'A')
-
-@register_model
-def resnet20B(*args, **kwargs):
-    return ResNet(BasicBlock, [3, 3, 3], 10, 'B')
+def resnet32B(*args, **kwargs):
+    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
 
 
 @register_model
-def resnet13B(*args, **kwargs):
-    return ResNet(BasicBlock, [3, 3], 10, 'B')
+def resnet3(*args, **kwargs):
+    return ResNet(BasicBlock, [1, 1, 1], 10, 'B')
+
 
 @register_model
-def resnet36B(*args, **kwargs):
-    return ResNet(BasicBlock, [6, 6, 6], 10, 'B')
+def resnet6(*args, **kwargs):
+    return ResNet(BasicBlock, [4, 1, 1], 10, 'B')
+
 
 @register_model
-def resnet36BBN(*args, **kwargs):
-    return ResNet(BasicBlockBN, [6, 6, 6], 10, 'B')
+def resnet9(*args, **kwargs):
+    return ResNet(BasicBlock, [7, 1, 1], 10, 'B')
+
+
+@register_model
+def resnet12(*args, **kwargs):
+    return ResNet(BasicBlock, [9, 2, 1], 10, 'B')
+
+
+@register_model
+def resnet15(*args, **kwargs):
+    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
+
+
+@register_model
+def resnet18(*args, **kwargs):
+    return ResNet(BasicBlock, [9, 6, 3], 10, 'B')
 
 
 @register_model
 def resnet_toy(*args, **kwargs):
-    return ResNet(BasicBlock, [1, 1], 10, 'B')
+    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
 
 
 if __name__ == "__main__":
-    model = resnet36B()
+    model = resnet_toy()
     x = torch.randn(1, 3, 32, 32)
     y = model(x)
     print(model)

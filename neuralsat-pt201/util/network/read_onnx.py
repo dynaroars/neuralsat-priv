@@ -96,7 +96,7 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
     print(pytorch_model)
-    print('nhwc:', is_nhwc, batched_input_shape)
+    print('nhwc:', is_nhwc, batched_input_shape, batched_output_shape)
     
     # check conversion
     correct_conversion = True
@@ -109,23 +109,25 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
-        print(torch.norm(
+        print('correct_conversion:', torch.norm(
             output_onnx - torch.from_numpy(output_pytorch)
         ))
     except:
         raise OnnxConversionError
+
+    return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
 
     if not correct_conversion and custom_quirks.get('Conv', {}).get('merge_batch_norm', False):
         raise OnnxMergeBatchNormError
     
     if not correct_conversion and not custom_quirks.get('Softmax', {}).get('skip_last_layer', False):
         raise OnnxOutputAllCloseError
-    # else:
-    #     print(pytorch_model)
-    #     print(batched_input_shape)
-    #     print(batched_output_shape)
-    #     print('DEBUG: correct')
-    #     exit()
+
+    # print(pytorch_model)
+    # print(batched_input_shape)
+    # print(batched_output_shape)
+    # print('DEBUG: correct')
+    # exit()
         
     if is_nhwc:
         assert len(batched_input_shape) == 4

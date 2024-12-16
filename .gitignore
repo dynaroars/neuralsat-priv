@@ -10,7 +10,7 @@ neuralsat-pt201/train/checkpoints/
 *.json
 *.nsys-rep
 *.hatchet
-
+*.zip
 
 # neuralsat/onnx2pytorch*
 # neuralsat/auto_LiRPA*

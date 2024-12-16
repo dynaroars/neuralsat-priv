@@ -62,9 +62,8 @@ class vgg16(torch.nn.Module):
 
 # Learned perceptual metric
 class LPIPS(nn.Module):
-    def __init__(self, net='vgg', version='0.1', use_dropout=True):
+    def __init__(self, use_dropout=True):
         super(LPIPS, self).__init__()
-        self.version = version
         # Imagenet normalization
         self.scaling_layer = ScalingLayer()
         ########################
@@ -87,7 +86,7 @@ class LPIPS(nn.Module):
         # Load the weights of trained LPIPS model
 
         model_path = os.path.abspath(
-            os.path.join(inspect.getfile(self.__init__), '..', 'weights/v%s/%s.pth' % (version, net)))
+            os.path.join(inspect.getfile(self.__init__), f'../vgg.pth'))
         print('Loading model from: %s' % model_path)
         self.load_state_dict(torch.load(model_path, map_location=device), strict=False)
         ########################

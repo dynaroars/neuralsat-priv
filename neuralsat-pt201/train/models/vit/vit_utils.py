@@ -13,6 +13,14 @@ def subtraction_gaussian_kernel_torch(q, k):
     matB_square = torch.ones(q.shape[-2:], device=q.device) @ k ** 2.
     return matA_square + matB_square - 2. * (q @ k)
 
+def stable_softmax(x, dim):
+    # Subtract the max value from each element to prevent overflow
+    x_max = torch.max(x, dim=dim, keepdim=True)[0]  # Compute max per row if x is a matrix
+    exp_x = torch.exp(x - x_max)  # Subtract max and compute exp
+    softmax_x = exp_x / exp_x.sum(dim=dim, keepdim=True)  # Normalize to get probabilities
+    return softmax_x
+
+    
 class Tokenizer(nn.Module):
     def __init__(self, kernel_size, stride, padding,
                  n_conv_layers=1, n_input_channels=3, n_output_channels=64,
@@ -89,7 +97,8 @@ class Attention(nn.Module):
         
         attn = (q @ k.transpose(-2, -1)) * self.scale
         # print(1, attn.shape)
-        attn = attn.softmax(dim=-1)
+        # attn = attn.softmax(dim=-1)
+        attn = stable_softmax(attn, dim=-1)
         
         # attn = (q @ k.transpose(-2, -1)) * self.scale
         # attn = self.attn_act(attn)

@@ -26,6 +26,8 @@ def attack(model: ConvertModel | torch.nn.Module, x: torch.Tensor,
     serialized_conditions = serialize_specs(x, cs, rhs)
     
     # sanity check
+    if output.ndim > 2:
+        output = output.flatten(1)
     output = output[:, None, None].repeat(1, 1, len(serialized_conditions[-1][0]), 1)
     if check_adv_multi(x, output, serialized_conditions, data_max.unsqueeze(1), data_min.unsqueeze(1)):
         x = x[:, None, None]

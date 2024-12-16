@@ -37,8 +37,11 @@ def train(args):
     print(f'{autoencoder_config=}\n')
     print(f'{train_config=}\n')
     
-    model_ckpt = os.path.join(train_config['task_name'], train_config['vae_autoencoder_ckpt_name'])
-    disc_ckpt = os.path.join(train_config['task_name'], train_config['vae_discriminator_ckpt_name'])
+    model_ckpt_name = os.path.join(train_config['task_name'], train_config['vae_autoencoder_ckpt_name'])
+    model_ckpt = model_ckpt_name + '.pth'
+    
+    disc_ckpt_name = os.path.join(train_config['task_name'], train_config['vae_discriminator_ckpt_name'])
+    disc_ckpt = disc_ckpt_name + '.pth'
     
     # Set the desired seed value #
     seed = train_config['seed']
@@ -51,10 +54,13 @@ def train(args):
     
     # Create the model and dataset #
     model = VAE(
-        im_channels=dataset_config['im_channels'],
-        model_config=autoencoder_config,
+        dataset_config=config['dataset_params'],
+        model_config=config['autoencoder_params'],
     ).to(device)
     print(model)
+    
+    if os.path.exists(model_ckpt):
+        model.load_state_dict(torch.load(model_ckpt))
     
     params = get_model_params(model)
     print(f'{params=}')
@@ -116,8 +122,7 @@ def train(args):
     )
 
     # Create output directories
-    if not os.path.exists(train_config['task_name']):
-        os.mkdir(train_config['task_name'])
+    os.makedirs(train_config['task_name'], exist_ok=True)
         
     num_epochs = train_config['autoencoder_epochs']
 
@@ -130,6 +135,9 @@ def train(args):
     lpips_model = LPIPS().eval().to(device)
     discriminator = Discriminator(im_channels=dataset_config['im_channels']).to(device)
     
+    if os.path.exists(disc_ckpt):
+        discriminator.load_state_dict(torch.load(disc_ckpt))
+        
     optimizer_d = Adam(discriminator.parameters(), lr=train_config['autoencoder_lr'], betas=(0.5, 0.999))
     optimizer_g = Adam(model.parameters(), lr=train_config['autoencoder_lr'], betas=(0.5, 0.999))
     
@@ -142,7 +150,8 @@ def train(args):
     image_save_steps = train_config['autoencoder_img_save_steps']
     img_save_count = 0
     
-    for epoch_idx in range(num_epochs):
+    pbar = tqdm(range(num_epochs), desc=f'VAE {params=} ({os.path.basename(args.config_path)})')
+    for epoch_idx in pbar:
         recon_losses = []
         perceptual_losses = []
         disc_losses = []
@@ -152,7 +161,7 @@ def train(args):
         optimizer_g.zero_grad()
         optimizer_d.zero_grad()
         
-        for (im, _) in tqdm(data_loader, desc=f'Epoch {epoch_idx+1}/{num_epochs}'):
+        for (im, _) in data_loader:
             step_count += 1
             im = im.float().to(device)
             
@@ -221,15 +230,25 @@ def train(args):
         optimizer_g.step()
         optimizer_g.zero_grad()
         if len(disc_losses) > 0:
-            print(
-                f'Epoch : {epoch_idx + 1}/{num_epochs} | Recon Loss : {np.mean(recon_losses):.4f} | Perceptual Loss : {np.mean(perceptual_losses):.4f} | '
-                f'G Loss : {np.mean(gen_losses):.4f} | D Loss {np.mean(disc_losses):.4f}'
-            )
+            # print(
+            #     f'Epoch : {epoch_idx + 1}/{num_epochs} | Recon Loss : {np.mean(recon_losses):.4f} | Perceptual Loss : {np.mean(perceptual_losses):.4f} | '
+            #     f'G Loss : {np.mean(gen_losses):.4f} | D Loss {np.mean(disc_losses):.4f}'
+            # )
+            pbar.set_postfix(recon=np.mean(recon_losses), perceptual=np.mean(perceptual_losses), gen=np.mean(gen_losses), disc=np.mean(disc_losses))
         else:
-            print(f'Epoch: {epoch_idx + 1}/{num_epochs} | Recon Loss : {np.mean(recon_losses):.4f} | Perceptual Loss : {np.mean(perceptual_losses):.4f}')
+            pbar.set_postfix(recon=np.mean(recon_losses), perceptual=np.mean(perceptual_losses))
+            # print(f'Epoch: {epoch_idx + 1}/{num_epochs} | Recon Loss : {np.mean(recon_losses):.4f} | Perceptual Loss : {np.mean(perceptual_losses):.4f}')
         
-        torch.save(model.state_dict(), model_ckpt)
-        torch.save(discriminator.state_dict(), disc_ckpt)
+        if not epoch_idx % 100:
+            # model.eval()
+            torch.save(model.state_dict(), model_ckpt)
+            torch.save(model.state_dict(), model_ckpt_name + f'_epoch_{epoch_idx}.pth')
+            
+            torch.save(discriminator.state_dict(), disc_ckpt)
+            
+            
+            # model.train()
+            
     print('Done Training...')
 
 

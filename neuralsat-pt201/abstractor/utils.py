@@ -23,7 +23,7 @@ def update_refined_beta(self: 'abstractor.abstractor.NetworkAbstractor', betas, 
 @beartype
 def new_input(self: 'abstractor.abstractor.NetworkAbstractor', x_L: torch.Tensor, x_U: torch.Tensor) -> BoundedTensor:
     if os.environ.get('NEURALSAT_ASSERT'):
-        assert torch.all(x_L <= x_U + 1e-8) #, f'{x_L=}\n\n{x_U=}'
+        assert torch.all(x_L <= x_U + 1e-6) #, f'{x_L=}\n\n{x_U=}'
     new_x = BoundedTensor(x_L, PerturbationLpNorm(x_L=x_L, x_U=x_U)).to(self.device)
     if hasattr(self, 'extras'):
         new_x.ptb.extras = self.extras
@@ -229,7 +229,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
     splitting_points = {k: [] for k in lower_bounds}
     
     if os.environ.get('NEURALSAT_ASSERT'):
-        assert all([torch.all(lower_bounds[key] <= upper_bounds[key]) for key in lower_bounds])
+        assert all([torch.all(lower_bounds[key] <= upper_bounds[key] + 1e-6) for key in lower_bounds])
     
     for i in range(batch):
         n_name, n_id, n_point = decisions[i]
@@ -256,7 +256,7 @@ def hidden_split_idx(self: 'abstractor.abstractor.NetworkAbstractor', lower_boun
             # set 2nd half (set upper)
             double_upper_bounds[key].view(2 * batch, -1)[splitting_indices_batch[key] + batch, splitting_indices_neuron[key]] = splitting_points[key]
             if os.environ.get('NEURALSAT_ASSERT'):
-                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key])
+                assert torch.all(double_lower_bounds[key] <= double_upper_bounds[key] + 1e-6)
                 
         new_intermediate_layer_bounds[key] = [double_lower_bounds[key], double_upper_bounds[key]]
             

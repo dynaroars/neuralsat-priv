@@ -12,8 +12,10 @@ from auto_LiRPA.perturbations import PerturbationLpNorm
 from auto_LiRPA import BoundedTensor, BoundedModule
 from util.misc.torch_cuda_memory import gc_cuda
 from train.models.vit.vit import *
-from decomposer.dec_verifier import PytorchWrapper
+from decomposer.utils import PytorchWrapper
 from abstractor.params import get_initialize_opt_params
+
+from setting import Settings
 
 EXTRAS_VIT = {
     'sparse_intermediate_bounds': False,
@@ -30,8 +32,8 @@ def get_model_params(model):
 def non_optim_bounds(net, input_shape, lower, upper, verbose=True, c=None, device='cpu', method='backward', conv_mode='patches', extras=EXTRAS_VIT):
     new_x = BoundedTensor(lower, PerturbationLpNorm(x_L=lower, x_U=upper)).to(device)
 
-    print(f'Computing bounds using {method=} {c=} {conv_mode=} {extras=}')
-    
+    print(f'Computing bounds using {method=} {c=} {conv_mode=} {extras=} {Settings.share_alphas=}')
+    net.eval()
     
     abstract = BoundedModule(
         model=net, 
@@ -45,11 +47,12 @@ def non_optim_bounds(net, input_shape, lower, upper, verbose=True, c=None, devic
     
     l, u, aux_reference_bounds = abstract.init_alpha(
         x=(new_x,), 
-        share_alphas=True, 
+        share_alphas=Settings.share_alphas, 
         c=c, 
         bound_upper=True,
     )
     if verbose:
+        print('Bound backward')
         print(f'{l.shape=}')
         print(f'{l=}')
         print(f'{u=}')
@@ -60,15 +63,26 @@ def non_optim_bounds(net, input_shape, lower, upper, verbose=True, c=None, devic
     abstract.set_bound_opts(get_initialize_opt_params(lambda x: False))
     abstract.set_bound_opts({'optimize_bound_args': {'iteration': 10}})
     
-    l, u = abstract.compute_bounds(
+    l, _ = abstract.compute_bounds(
         x=(new_x,), 
         C=c,
+        bound_lower=True, 
+        bound_upper=False, 
+        method='crown-optimized',
+        aux_reference_bounds=aux_reference_bounds, 
+    )
+    
+    _, u = abstract.compute_bounds(
+        x=(new_x,), 
+        C=c,
+        bound_lower=False, 
         bound_upper=True, 
         method='crown-optimized',
         aux_reference_bounds=aux_reference_bounds, 
     )
     
     if verbose:
+        print('Bound optimized')
         print(f'{l.shape=}')
         print(f'{l=}')
         print(f'{u=}')

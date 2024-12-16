@@ -163,7 +163,7 @@ def extract_worst_bound(domains, objective_id):
     assert len(domains.output_lbs) > 0
     indices = domains.objective_ids == objective_id
     worst_bounds = domains.output_lbs[indices] - domains.rhs[indices]
-    assert worst_bounds.numel() > 0
+    assert worst_bounds.numel() > 0, f'{worst_bounds=}'
     return worst_bounds.amin().item()
 
 def extract_solved_objective(verifier, objective):
@@ -189,10 +189,14 @@ def extract_solved_objective(verifier, objective):
         elif value in unsolved_objective_ids:
             # TODO: use worst bound as tightened bound
             worst_bound = extract_worst_bound(remaining_domains, value)
-            assert worst_bound <= 0, f'Invalid {worst_bound=}'
+            assert worst_bound <= 0.0, f'Invalid {worst_bound=}'
             unsolved_ids_w_bounds.append((idx, worst_bound))
             # print(idx, value, worst_bound)
         else:
+            # verified
+            # worst_bound = extract_worst_bound(remaining_domains, value)
+            # print(f'Verified {worst_bound=}')
+            # assert worst_bound >= 0.0
             verified_ids.append(idx)
     # print(f'{unsolved_ids_w_bounds=}')
         

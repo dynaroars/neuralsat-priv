@@ -83,6 +83,7 @@ if __name__ == '__main__':
     # network
     Timers.tic('Load network') if Settings.use_timer else None
     model, input_shape, output_shape, is_nhwc = parse_onnx(args.net)
+    model.eval()
     model.to(args.device)
     Timers.toc('Load network') if Settings.use_timer else None
     

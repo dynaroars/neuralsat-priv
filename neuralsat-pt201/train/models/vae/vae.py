@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from .blocks import DownBlock, MidBlock, UpBlock
 
-
-class VAE(nn.Module):
+class EncoderBlock(nn.Module):
+    
     def __init__(self, dataset_config, model_config):
         super().__init__()
         self.down_channels = model_config['down_channels']
@@ -11,18 +11,13 @@ class VAE(nn.Module):
         self.resample = model_config['resample']
         self.num_down_layers = model_config['num_down_layers']
         self.num_mid_layers = model_config['num_mid_layers']
-        self.num_up_layers = model_config['num_up_layers']
         
-        # To disable attention in Downblock of Encoder and Upblock of Decoder
         # Latent Dimension
         self.z_channels = model_config['z_channels']
         
         # Assertion to validate the channel information
         assert self.mid_channels[0] == self.down_channels[-1], f'{self.mid_channels[0]=} {self.down_channels[-1]=}'
         assert self.mid_channels[-1] == self.down_channels[-1]
-        
-        # Wherever we use downsampling in encoder correspondingly use
-        # upsampling in decoder
         
         ##################### Encoder ######################
         self.encoder_conv_in = nn.Conv2d(dataset_config['im_channels'], self.down_channels[0], kernel_size=3, padding=(1, 1))
@@ -41,16 +36,43 @@ class VAE(nn.Module):
                                               out_channels=self.mid_channels[i + 1],
                                               num_layers=self.num_mid_layers))
         
-        # self.encoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[-1])
-        # self.encoder_norm_out = nn.Identity()
-        # self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], self.z_channels, kernel_size=3, padding=1)
-        self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], 2*self.z_channels, kernel_size=3, padding=1)
-
-        # Latent Dimension is 2*Latent because we are predicting mean & variance
-        # self.pre_quant_conv = nn.Conv2d(self.z_channels, self.z_channels, kernel_size=1)
-        self.pre_quant_conv = nn.Conv2d(2*self.z_channels, 2*self.z_channels, kernel_size=1)
-        ####################################################
+        self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], self.z_channels, kernel_size=3, padding=1)
+        # Latent Dimension is Latent because we are predicting mean & variance
+        self.pre_quant_conv = nn.Conv2d(self.z_channels, self.z_channels, kernel_size=1)
+ 
+    def forward(self, x):
+        out = self.encoder_conv_in(x)
+        for down in self.encoder_layers:
+            out = down(out)
+        for mid in self.encoder_mids:
+            out = mid(out)
+        # out = out.relu()
+        out = self.encoder_conv_out(out)
+        # out = out.relu()
+        out = self.pre_quant_conv(out)
+        return out
+        # mean, logvar = torch.chunk(out, 2, dim=1)
+        # print(mean.shape, out.shape)
+        # exit()
+        return mean + logvar
         
+
+class DecoderBlock(nn.Module):
+    
+    def __init__(self, dataset_config, model_config):
+        super().__init__()
+        self.down_channels = model_config['down_channels']
+        self.mid_channels = model_config['mid_channels']
+        self.resample = model_config['resample']
+        self.num_mid_layers = model_config['num_mid_layers']
+        self.num_up_layers = model_config['num_up_layers']
+        
+        # Latent Dimension
+        self.z_channels = model_config['z_channels']
+        
+        # Assertion to validate the channel information
+        assert self.mid_channels[0] == self.down_channels[-1], f'{self.mid_channels[0]=} {self.down_channels[-1]=}'
+        assert self.mid_channels[-1] == self.down_channels[-1]
         
         ##################### Decoder ######################
         self.post_quant_conv = nn.Conv2d(self.z_channels, self.z_channels, kernel_size=1)
@@ -70,57 +92,43 @@ class VAE(nn.Module):
                                                up_sample=self.resample,
                                                num_layers=self.num_up_layers))
         
-        # self.decoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[0])
-        # self.decoder_norm_out = nn.Identity()
         self.decoder_conv_out = nn.Conv2d(self.down_channels[0], dataset_config['im_channels'], kernel_size=3, padding=1)
     
-    def encode(self, x):
-        out = self.encoder_conv_in(x)
-        for down in self.encoder_layers:
-            out = down(out)
-        for mid in self.encoder_mids:
-            out = mid(out)
-        # out = self.encoder_norm_out(out)
-        # out = nn.SiLU()(out)
-        out = out.relu()
-        out = self.encoder_conv_out(out)
-        print(out.shape)
-        out = self.pre_quant_conv(out)
-        # return out
-        mean, logvar = torch.chunk(out, 2, dim=1)
-        # return mean, out
-        std = torch.exp(0.5 * logvar)
-        sample = mean + std * 0.1 # torch.randn_like(mean).to(x)
-        return sample, out
-    
-    def decode(self, z):
-        out = z
-        out = self.post_quant_conv(out)
+    def forward(self, z):
+        out = self.post_quant_conv(z)
         out = self.decoder_conv_in(out)
+        out = out.relu()
         for mid in self.decoder_mids:
             out = mid(out)
         for up in self.decoder_layers:
             out = up(out)
-        out = out.relu()
         out = self.decoder_conv_out(out)
         return out
 
-    # def forward(self, x):
-    #     z, encoder_output = self.encode(x)
-    #     out = self.decode(z)
-    #     return out, encoder_output
 
-
+class VAE(nn.Module):
+    
+    def __init__(self, dataset_config, model_config):
+        super().__init__()
+        self.layers = nn.ModuleList([
+            EncoderBlock(dataset_config, model_config),
+            DecoderBlock(dataset_config, model_config)
+        ])
+        
     def forward(self, x):
-        z, _ = self.encode(x)
-        out = self.decode(z)
-        return out
+        for layer in self.layers:
+            x = layer(x)
+        return x
 
+    
+def get_model_params(model):
+    total_params = sum(p.numel() for p in model.parameters())
+    return total_params
 
 
 if __name__ == "__main__":
     import yaml
-    with open('config/cifar10.yaml', 'r') as file:
+    with open('train/config/cifar10_4.yaml', 'r') as file:
         try:
             config = yaml.safe_load(file)
         except yaml.YAMLError as exc:
@@ -137,9 +145,16 @@ if __name__ == "__main__":
     
     x = torch.randn(1, 3, 32, 32)
     
-    y = model(x)
+    y1 = model(x)
     
-    print(f'{x.shape=} {y.shape=}')
+    # print(f'{x.shape=} {y1.shape=}')
+    
+    z = model.layers[0](x)
+    y2 = model.layers[1](z)
+    
+    assert torch.equal(y1, y2)
+    print('Encoder:', get_model_params(model.layers[0]))
+    print('Decoder:', get_model_params(model.layers[1]))
     
     torch.onnx.export(
         model,
@@ -148,3 +163,24 @@ if __name__ == "__main__":
         verbose=False,
         opset_version=12,
     )
+    
+    
+    
+    torch.onnx.export(
+        model.layers[0],
+        x,
+        'vae_enc.onnx',
+        verbose=False,
+        opset_version=12,
+    )
+    
+    
+    torch.onnx.export(
+        model.layers[1],
+        z,
+        'vae_dec.onnx',
+        verbose=False,
+        opset_version=12,
+    )
+    
+    
