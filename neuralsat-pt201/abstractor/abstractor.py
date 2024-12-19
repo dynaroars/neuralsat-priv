@@ -168,7 +168,9 @@ class NetworkAbstractor:
         
 
     @beartype
-    def initialize(self: 'NetworkAbstractor', objective: typing.Any, reference_bounds: dict | None = None, short_cut: bool = False) -> AbstractResults:
+    def initialize(self: 'NetworkAbstractor', objective: typing.Any, 
+                   share_alphas: list = [], reference_bounds: dict | None = None, 
+                   short_cut: bool = False) -> AbstractResults:
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -238,13 +240,14 @@ class NetworkAbstractor:
         # initial bounds
         lb_init, _, aux_reference_bounds = self.net.init_alpha(
             x=(x,), 
-            share_alphas=Settings.share_alphas, 
+            share_alphas=share_alphas, 
             c=objective.cs, 
             bound_upper=False,
         )
-        print(f'[Init alpha] {x.shape=} {Settings.share_alphas=} {objective.cs.shape=} {lb_init.flatten()=}',)
+        print(f'[Init alpha] {x.shape=} {share_alphas=} {objective.cs.shape=}',)
+        print(f'[Init alpha] {lb_init.flatten()=}\n\n')
         logger.info(f'Initial bounds (fisrt 10): {lb_init.detach().cpu().flatten()[:10]}')
-        
+    
         if stop_criterion_func(lb_init).all().item():
             return AbstractResults(**{'output_lbs': lb_init})
 
@@ -256,6 +259,7 @@ class NetworkAbstractor:
             aux_reference_bounds=aux_reference_bounds, 
             reference_bounds=reference_bounds,
         )
+        print(f'[Optimized alpha] {lb.flatten()=}',)
         logger.info(f'Initial optimized bounds (fisrt 10): {lb.detach().cpu().flatten()[:10]}')
         if stop_criterion_func(lb).all().item():
             return AbstractResults(**{'output_lbs': lb})

@@ -35,7 +35,6 @@ def get_initialize_opt_params(stop_criterion_func: typing.Callable) -> dict:
         'optimize_bound_args': {
             'enable_alpha_crown': True,
             'enable_beta_crown': False, 
-            'use_shared_alpha': Settings.share_alphas, 
             'init_alpha': False, # no need to initilize again
             'fix_interm_bounds': True,
             'stop_criterion_func': stop_criterion_func,
@@ -54,7 +53,6 @@ def get_beta_opt_params(stop_criterion_func: typing.Callable) -> dict:
         'optimize_bound_args': {
             'enable_alpha_crown': True,
             'enable_beta_crown': True, 
-            'use_shared_alpha': Settings.share_alphas, 
             'fix_interm_bounds': True, 
             'iteration': 20,
             'lr_alpha': 0.1, 

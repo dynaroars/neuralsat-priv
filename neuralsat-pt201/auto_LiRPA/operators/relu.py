@@ -33,7 +33,6 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         self.alpha_lookup_idx = OrderedDict()  # For alpha with sparse spec dimention.
         self.alpha_indices = None  # indices of non-zero alphas.
         verbosity = self.options.get('verbosity', 0)
-
         # Alpha can be sparse in both spec dimension, and the C*H*W dimension.
         # We first deal with the sparse-feature alpha, which is sparse in the
         # C*H*W dimesnion of this layer.
@@ -61,8 +60,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                         self.alpha_indices[2]]
                 elif len(self.alpha_indices) == 2:
                     # This layer is after a conv1d layer.
-                    alpha_init = self.init_d[
-                                 :, :, self.alpha_indices[0], self.alpha_indices[1]]
+                    alpha_init = self.init_d[:, :, self.alpha_indices[0], self.alpha_indices[1]]
                 else:
                     raise ValueError
                 if verbosity > 0:
@@ -144,7 +142,6 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         # The *relu_node_shape might be sparse (sparse-feature alpha), where the non-zero values are indicated by self.alpha_indices.
         # The out_shape might be sparse (sparse-spec alpha), where the non-zero values are indexed by self.alpha_lookup_idx.
         if unstable_idx is not None:
-            # print(f'relu layer {self.name}, start_node {start_node}, unstable_idx {type(unstable_idx)} alpha idx {self.alpha_lookup_idx[start_node.name].size()}')
             if self.alpha_lookup_idx is not None:
                 alpha_lookup_idx = self.alpha_lookup_idx[start_node.name]
             else:
@@ -158,7 +155,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                     # For this node, since it is in matrix mode, the spec dimension is out_c * out_h * out_w
                     # Shape is [2, spec, batch, *this_layer_shape]
                     if alpha_lookup_idx is None:
-                        if self.options['optimize_bound_args'].get('use_shared_alpha', False):
+                        if self.name in self.options['optimize_bound_args'].get('use_shared_alpha', []): 
                             # alpha is shared, and its spec dimension is always 1. In this case we do not need to select.
                             # selected_alpha will have shape [2, 1, batch, *this_layer_shape]
                             pass
@@ -186,7 +183,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                 # Start node is a FC node.
                 # Only unstable neurons of the start_node neurons are used.
                 assert alpha_lookup_idx is None or alpha_lookup_idx.ndim == 1, f'{alpha_lookup_idx is None = } {alpha_lookup_idx.ndim=}'
-                if self.options['optimize_bound_args'].get('use_shared_alpha', False):
+                if self.name in self.options['optimize_bound_args'].get('use_shared_alpha', []): 
                     # Shared alpha is used, all output specs use the same alpha. No selection is needed.
                     # The spec dim is 1 and will be broadcast.
                     selected_alpha = self.alpha[start_node.name]

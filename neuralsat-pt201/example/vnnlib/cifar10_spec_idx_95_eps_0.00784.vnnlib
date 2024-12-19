@@ -9234,13 +9234,13 @@
 
 ; Definition of output constraints
 (assert (or
+	(and (>= Y_5 Y_6))
+	(and (>= Y_7 Y_6))
+	(and (>= Y_8 Y_6))
+	(and (>= Y_9 Y_6))
 	(and (>= Y_0 Y_6))
 	(and (>= Y_1 Y_6))
 	(and (>= Y_2 Y_6))
 	(and (>= Y_3 Y_6))
 	(and (>= Y_4 Y_6))
-	(and (>= Y_5 Y_6))
-	(and (>= Y_7 Y_6))
-	(and (>= Y_8 Y_6))
-	(and (>= Y_9 Y_6))
 ))

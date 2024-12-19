@@ -19,7 +19,7 @@ default_optimize_bound_args = {
     'iteration': 20,  # Number of alpha/beta optimization iterations.
     # Share some alpha variables to save memory at the cost of slightly
     # looser bounds.
-    'use_shared_alpha': False,
+    'use_shared_alpha': [],
     # Optimizer used for alpha and beta optimization.
     'optimizer': 'adam',
     # Save best results of alpha/beta/bounds during optimization.
@@ -313,6 +313,9 @@ def _get_optimized_bounds(
     else:
         raise NotImplementedError(opt_choice)
 
+    num_params = sum(p.numel() for group in opt.param_groups for p in group['params'] if p.requires_grad)
+    print(f'{num_params=}')
+    
     # Create a weight vector to scale learning rate.
     loss_weight = torch.ones(size=(x[0].size(0),), device=x[0].device)
     scheduler = optim.lr_scheduler.ExponentialLR(opt, opts['lr_decay'])
@@ -619,7 +622,7 @@ def _get_optimized_bounds(
     return best_ret
 
 
-def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
+def init_alpha(self: 'BoundedModule', x, share_alphas=[], method='backward',
                c=None, bound_lower=True, bound_upper=True, final_node_name=None,
                interm_bounds=None, activation_opt_params=None,
                skip_bound_compute=False):
@@ -668,14 +671,17 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=False, method='backward',
         if method in ['forward', 'forward+backward']:
             start_nodes.append(('_forward', 1, None, False))
         if method in ['backward', 'forward+backward']:
+            node.options['optimize_bound_args']['use_shared_alpha'] = share_alphas
             backward_from_node = node
+
             start_nodes += self.get_alpha_crown_start_nodes(
                 node,
                 c=c,
-                share_alphas=share_alphas,
+                share_alphas=node.name in share_alphas,
                 final_node_name=final_node_name,
                 backward_from_node=backward_from_node
             )
+
         if skipped:
             node.restore_optimized_params(activation_opt_params[node.name])
         else:

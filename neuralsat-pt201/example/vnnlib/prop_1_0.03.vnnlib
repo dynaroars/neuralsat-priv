@@ -3153,6 +3153,8 @@
 
 ; Output constraints:
 (assert (or
+    (and (>= Y_9 Y_1))
+    (and (>= Y_8 Y_1))
     (and (>= Y_0 Y_1))
     (and (>= Y_2 Y_1))
     (and (>= Y_3 Y_1))
@@ -3160,6 +3162,4 @@
     (and (>= Y_5 Y_1))
     (and (>= Y_6 Y_1))
     (and (>= Y_7 Y_1))
-    (and (>= Y_8 Y_1))
-    (and (>= Y_9 Y_1))
 ))
