@@ -325,7 +325,7 @@ def check_optimized_variable_sparsity(self: 'BoundedModule', node):
             if relu.alpha_lookup_idx[node.name] is not None:
                 # This node was created with sparse alpha
                 alpha_sparsity = True
-            elif self.bound_opts['optimize_bound_args']['use_shared_alpha']:
+            elif node.name in self.bound_opts['optimize_bound_args']['use_shared_alpha']:
                 # Shared alpha, the spec dimension is 1, and sparsity can be supported.
                 alpha_sparsity = True
             else:

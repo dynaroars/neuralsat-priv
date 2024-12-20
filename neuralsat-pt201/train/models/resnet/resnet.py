@@ -14,6 +14,12 @@ except ModuleNotFoundError:
         return func
                 
 
+    
+def get_model_params(model):
+    total_params = sum(p.numel() for p in model.parameters())
+    return total_params
+
+
 class PreLayer(nn.Module):
 
     def __init__(self, planes):
@@ -44,20 +50,20 @@ class PostLayer(nn.Module):
         return x
     
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, option='B'):
+    def __init__(self, block, num_blocks, num_classes=10, option='B', in_planes=16, hidden_planes=32):
         super(ResNet, self).__init__()
-        self.in_planes = 16
-        self.planes = 32
+        self.in_planes = in_planes
+        self.hidden_planes = hidden_planes
         pre_layer = PreLayer(self.in_planes)
         # layers = [PreLayer()]
         assert len(num_blocks)
-        layers = self._make_layer(block, self.planes, num_blocks[0], stride=1, expansion=1, option=option)
+        layers = self._make_layer(block, self.hidden_planes, num_blocks[0], stride=1, expansion=1, option=option)
         layers[0] = nn.Sequential(pre_layer, layers[0])
         if len(num_blocks) > 1:
-            layers += self._make_layer(block, self.planes, num_blocks[1], stride=2, expansion=1, option=option)
+            layers += self._make_layer(block, self.hidden_planes, num_blocks[1], stride=2, expansion=1, option=option)
         if len(num_blocks) > 2:
-            layers += self._make_layer(block, self.planes, num_blocks[2], stride=2, expansion=1, option=option)
-        layers[-1] = nn.Sequential(layers[-1], PostLayer(dim=self.planes, num_classes=num_classes))
+            layers += self._make_layer(block, self.hidden_planes, num_blocks[2], stride=2, expansion=1, option=option)
+        layers[-1] = nn.Sequential(layers[-1], PostLayer(dim=self.hidden_planes, num_classes=num_classes))
         
         self.layers = nn.ModuleList(layers)
         self.apply(_weights_init)
@@ -84,56 +90,29 @@ class ResNet(nn.Module):
             x = layer(x)
         return x
 
-@register_model
-def resnet32B(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
-
-
-@register_model
-def resnet3(*args, **kwargs):
-    return ResNet(BasicBlock, [1, 1, 1], 10, 'B')
-
-
-@register_model
-def resnet6(*args, **kwargs):
-    return ResNet(BasicBlock, [4, 1, 1], 10, 'B')
-
-
-@register_model
-def resnet9(*args, **kwargs):
-    return ResNet(BasicBlock, [7, 1, 1], 10, 'B')
-
-
-@register_model
-def resnet12(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 2, 1], 10, 'B')
-
-
-@register_model
-def resnet15(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
-
-
-@register_model
-def resnet18(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 6, 3], 10, 'B')
-
 
 @register_model
 def resnet_toy(*args, **kwargs):
-    return ResNet(BasicBlock, [9, 3, 3], 10, 'B')
+    return ResNet(
+        block=BasicBlockBN, 
+        num_blocks=[3, 3, 3],
+        num_classes=10, 
+        option='B', 
+        in_planes=8, 
+        hidden_planes=20)
 
 
 if __name__ == "__main__":
     model = resnet_toy()
     x = torch.randn(1, 3, 32, 32)
-    y = model(x)
     print(model)
+    print('#params:', get_model_params(model))
+    y = model(x)
     print(y)
     
-    torch.onnx.export(
-        model,
-        x,
-        'test_resnet2.onnx',
-        opset_version=12,
-    )
+    # torch.onnx.export(
+    #     model,
+    #     x,
+    #     'test_resnet2.onnx',
+    #     opset_version=12,
+    # )
