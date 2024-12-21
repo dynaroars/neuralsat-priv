@@ -117,7 +117,6 @@ class BoundedModule(nn.Module):
         self._convert(model, global_input)
         self._mark_perturbed_nodes()
         self._optimize_graph()
-        self._expand_jacobian()
 
         self.next_split_hint = []  # Split hints, used in beta optimization.
         # Beta values for all intermediate bounds.
@@ -1346,8 +1345,6 @@ class BoundedModule(nn.Module):
         _get_optimized_bounds, init_alpha, update_best_beta,
         opt_reuse, opt_no_reuse, _to_float64, _to_default_dtype, get_refined_interm_bounds)
     from .beta_crown import (beta_crown_backward_bound, reset_beta, set_beta, get_split_nodes)
-    from .jacobian import (augment_gradient_graph, compute_jacobian_bounds,
-                           _expand_jacobian)
     from .optimize_graph import _optimize_graph
     from .edit_graph import add_nodes, add_input_node, delete_node, replace_node
 

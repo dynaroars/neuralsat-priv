@@ -1,6 +1,6 @@
 from .bound_ops import (
     Bound, BoundLinear, BoundPrimConstant, BoundGELU, BoundReluGrad,
-    BoundConv2dGrad, BoundSqr, BoundJacobianOP)
+    BoundConv2dGrad, BoundSqr)
 
 bound_op_map = {
     'onnx::Gemm': BoundLinear,
@@ -8,7 +8,6 @@ bound_op_map = {
     'grad::Relu': BoundReluGrad,
     'grad::Conv2d': BoundConv2dGrad,
     'grad::Sqr': BoundSqr,
-    'grad::jacobian': BoundJacobianOP,
     'custom::Gelu': BoundGELU,
 }
 

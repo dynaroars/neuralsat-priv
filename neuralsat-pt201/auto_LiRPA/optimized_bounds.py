@@ -508,7 +508,7 @@ def _get_optimized_bounds(
                                               best_betas, idx)
 
 
-        if os.environ.get('AUTOLIRPA_DEBUG_OPT', False):
+        if os.environ.get('AUTOLIRPA_DEBUG_OPT', False) or 1:
             print(f'****** iter [{i}]',
                   f'loss: {loss_sum.item()}, lr: {opt.param_groups[0]["lr"]}',
             )
