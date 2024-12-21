@@ -5,12 +5,12 @@ from verifier.verifier import Verifier
 from test import extract_instance
 from setting import Settings
 
-from train.models.cnn.cnn import conv_base
-from train.models.resnet.resnet import resnet_toy
+from train.models.resnet.resnet import *
 
 def main():
-    torch.manual_seed(0)
-    random.seed(0)
+    seed = 0
+    torch.manual_seed(seed)
+    random.seed(seed)
     
     Settings.setup(None)
     
@@ -21,7 +21,7 @@ def main():
     net_path = 'example/onnx/cifar10_2_255_simplified.onnx'
     vnnlib_path = 'example/vnnlib/cifar10_spec_idx_95_eps_0.00784.vnnlib'
     
-    device = 'cpu'
+    device = 'cuda'
     method = 'crown-optimized'
     extra_opts = {}
 
@@ -48,9 +48,9 @@ def main():
     ]
     print(share_alphas)
 
-    # share_alphas = ['/24', '/26']
-    share_alphas = ['/input.8', '/input.12', '/input.20', '/input.24', '/input.28', '/input.32', '/input.36',]
+    share_alphas = share_alphas[1:2]
     # share_alphas = []
+    print(f'\n[+] Current: {share_alphas=}\n')
     verifier.abstractor.initialize(objective, share_alphas=share_alphas)
 
 

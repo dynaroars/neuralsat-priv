@@ -37,9 +37,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         # We first deal with the sparse-feature alpha, which is sparse in the
         # C*H*W dimesnion of this layer.
         minimum_sparsity = self.options.get('minimum_sparsity', 0.9)
-        if (self.use_sparse_features_alpha
-                and hasattr(self.inputs[0], 'lower')
-                and hasattr(self.inputs[0], 'upper')):
+        if (self.use_sparse_features_alpha and hasattr(self.inputs[0], 'lower') and hasattr(self.inputs[0], 'upper')):
             # Pre-activation bounds available, we will store the alpha for unstable neurons only.
             # Since each element in a batch can have different unstable neurons,
             # for simplicity we find a super-set using any(dim=0).
@@ -55,9 +53,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                     alpha_init = self.init_d[:, :, self.alpha_indices[0]]
                 elif len(self.alpha_indices) == 3:
                     # This layer is after a conv2d layer.
-                    alpha_init = self.init_d[
-                        :, :, self.alpha_indices[0], self.alpha_indices[1],
-                        self.alpha_indices[2]]
+                    alpha_init = self.init_d[:, :, self.alpha_indices[0], self.alpha_indices[1], self.alpha_indices[2]]
                 elif len(self.alpha_indices) == 2:
                     # This layer is after a conv1d layer.
                     alpha_init = self.init_d[:, :, self.alpha_indices[0], self.alpha_indices[1]]
@@ -96,8 +92,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                 # For fully connected layer, or conv layer with shared alpha per channel.
                 # shape is (2, sparse_spec, batch, this_layer_shape)
                 # We create sparse specification dimension, where the spec dimension of alpha only includes slopes for unstable neurons in start_node.
-                self.alpha[ns] = torch.empty([self.alpha_size, sparsity + 1, batch_size, *alpha_shape],
-                                             dtype=torch.float, device=ref.device, requires_grad=True)
+                self.alpha[ns] = torch.empty([self.alpha_size, sparsity + 1, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
                 self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, sparse_spec) dimensions.
                 if verbosity > 0:
                     print(f'layer {self.name} start_node {ns} using sparse-spec alpha {list(self.alpha[ns].size())}'
@@ -127,8 +122,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                     self.alpha_lookup_idx[ns].data[unstable_idx_3d[0], unstable_idx_3d[1], unstable_idx_3d[2]] = indices
             else:
                 # alpha shape is (2, spec, batch, this_layer_shape). "this_layer_shape" may still be sparse.
-                self.alpha[ns] = torch.empty([self.alpha_size, size_s, batch_size, *alpha_shape],
-                                             dtype=torch.float, device=ref.device, requires_grad=True)
+                self.alpha[ns] = torch.empty([self.alpha_size, size_s, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
                 self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, spec) dimensions
                 if verbosity > 0:
                     print(f'layer {self.name} start_node {ns} using full alpha {list(self.alpha[ns].size())} with unstable '
@@ -198,7 +192,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                 raise ValueError
         else:
             # Spec dimension is dense. Alpha must not be created sparsely.
-            assert self.alpha_lookup_idx is None or self.alpha_lookup_idx[start_node.name] is None
+            assert self.alpha_lookup_idx is None or self.alpha_lookup_idx[start_node.name] is None, f'{start_node.name=} {self.name=}'
             selected_alpha = self.alpha[start_node.name]
         return selected_alpha, alpha_lookup_idx
 

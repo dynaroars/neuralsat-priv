@@ -677,7 +677,7 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=[], method='backward',
             start_nodes += self.get_alpha_crown_start_nodes(
                 node,
                 c=c,
-                share_alphas=node.name in share_alphas,
+                share_alphas=share_alphas,
                 final_node_name=final_node_name,
                 backward_from_node=backward_from_node
             )

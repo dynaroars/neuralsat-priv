@@ -807,7 +807,7 @@ def get_alpha_crown_start_nodes(
         self: 'BoundedModule',
         node,
         c=None,
-        share_alphas=False,
+        share_alphas=[],
         final_node_name=None,
         backward_from_node: Bound = None,
     ):
@@ -832,10 +832,17 @@ def get_alpha_crown_start_nodes(
         use_sparse_conv = None  # Whether a sparse-spec alpha is used for a conv output node. None for non-conv output node.
         use_full_conv_alpha = self.bound_opts.get('use_full_conv_alpha', False)
 
+        # Final layer, always the number of specs as the shape.
+        if nj.name == final_node_name:
+            size_final = self[final_node_name].output_shape[-1] if c is None else c.size(1)
+            # The 4-th element indicates that this start node is the final node,
+            # which may be utilized by operators that do not know the name of
+            # the final node.
+            start_nodes.append((final_node_name, size_final, None, True))
+            continue
+
         # Find the indices of unstable neuron, used for create sparse-feature alpha.
-        if (sparse_intermediate_bounds
-                and isinstance(node, BoundOptimizableActivation)
-                and nj.name != final_node_name and not share_alphas):
+        if (sparse_intermediate_bounds and isinstance(node, BoundOptimizableActivation) and (not node.name in share_alphas)):
             # Create sparse optimization variables for intermediate neurons.
             # These are called "sparse-spec" alpha because we only create alpha only for
             # the intermediate of final output nodes whose bounds are needed.
@@ -851,13 +858,11 @@ def get_alpha_crown_start_nodes(
                 elif isinstance(nj, (BoundConv, BoundAdd, BoundSub, BoundBatchNormalization)) and nj.mode == 'patches':
                     if nj.name in node.patch_size:
                         # unstable_idx has shape [channel_size_of_nj]. Batch and spatial dimensions are reduced.
-                        unstable_idx, _ = self.get_unstable_locations(
-                            nj.lower, nj.upper, channel_only=not use_full_conv_alpha, conv=True)
+                        unstable_idx, _ = self.get_unstable_locations(nj.lower, nj.upper, channel_only=not use_full_conv_alpha, conv=True)
                         use_sparse_conv = False  # alpha is shared among channels. Sparse-spec alpha in hw dimension not used.
                         if use_full_conv_alpha and unstable_idx[0].size(0) > use_full_conv_alpha_thresh:
                             # Too many unstable neurons. Using shared alpha per channel.
-                            unstable_idx, _ = self.get_unstable_locations(
-                                nj.lower, nj.upper, channel_only=True, conv=True)
+                            unstable_idx, _ = self.get_unstable_locations(nj.lower, nj.upper, channel_only=True, conv=True)
                             use_full_conv_alpha = False
                     else:
                         # Matrix mode for conv layers. Although the bound propagation started with patches mode,
@@ -871,16 +876,7 @@ def get_alpha_crown_start_nodes(
                 if isinstance(nj, (BoundConv, BoundAdd, BoundSub, BoundBatchNormalization)) and nj.mode == 'patches':
                     use_sparse_conv = False  # Sparse-spec alpha can never be used, because it is not a ReLU activation.
 
-        if nj.name == final_node_name:
-            # Final layer, always the number of specs as the shape.
-            size_final = self[final_node_name].output_shape[-1] if c is None else c.size(1)
-            # The 4-th element indicates that this start node is the final node,
-            # which may be utilized by operators that do not know the name of
-            # the final node.
-            start_nodes.append((final_node_name, size_final, None, True))
-            continue
-
-        if share_alphas:
+        if node.name in share_alphas:
             # all intermediate neurons from the same layer share the same set of alphas.
             output_shape = 1
         elif isinstance(node, BoundOptimizableActivation) and node.patch_size and nj.name in node.patch_size:

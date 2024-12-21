@@ -91,15 +91,50 @@ class ResNet(nn.Module):
         return x
 
 
+
+@register_model
+def resnet_base(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[1, 1, 1],
+        num_classes=10, 
+        option='B', 
+        in_planes=32, 
+        hidden_planes=24)
+
+
+
+@register_model
+def resnet_deep(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[1, 2, 3],
+        num_classes=10, 
+        option='B', 
+        in_planes=32, 
+        hidden_planes=24)
+
+
+@register_model
+def resnet_wide(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[1, 1, 1],
+        num_classes=10, 
+        option='B', 
+        in_planes=64, 
+        hidden_planes=64)
+
+
 @register_model
 def resnet_toy(*args, **kwargs):
     return ResNet(
         block=BasicBlock, 
-        num_blocks=[2, 2, 2],
+        num_blocks=[1, 1, 1],
         num_classes=10, 
         option='B', 
-        in_planes=3, 
-        hidden_planes=5)
+        in_planes=64, 
+        hidden_planes=64)
 
 
 if __name__ == "__main__":
