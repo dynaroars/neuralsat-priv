@@ -17,6 +17,7 @@ from timm.scheduler import create_scheduler_v2
 
 from models.resnet.resnet import *
 from models.vit.vit import *
+from models.cnn.cnn import *
 
 loss_fn_p = torch.nn.CrossEntropyLoss()
 
@@ -137,7 +138,7 @@ def parse_args():
     parser.add_argument('--dataset', default='mnist')
     parser.add_argument('--data_root', default='data')
     parser.add_argument('--save_dir', default='weights')
-    parser.add_argument('--model', type=str, default='vit', choices=['vit', 'resnet'])
+    parser.add_argument('--model', type=str, default='vit', choices=['vit', 'resnet', 'cnn'])
     parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_epoch', type=int, default=10)
@@ -154,50 +155,26 @@ def parse_args():
 
 def main():
     args = parse_args()
-    
     random_seed(args.seed)
     
     output_dir = f'{args.save_dir}/{args.output_folder}/{args.output_name}'
     os.makedirs(output_dir, exist_ok=True)
     
+    num_classes = 10
     if args.dataset.endswith('mnist'):
         input_shape = (1, 1, 28, 28)
-        dataset_class = torchvision.datasets.MNIST
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
     elif args.dataset.endswith('cifar10'):
         input_shape = (1, 3, 32, 32)
-        dataset_class = torchvision.datasets.CIFAR10
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2470, 0.2435, 0.2616]),
-        ])
     else:
         raise ValueError(args.dataset)
     
-    num_classes = 10
-    
-    # train_set = dataset_class(
-    #     root=args.data_root,
-    #     train=True,
-    #     transform=transform,
-    #     download=True)
-    
-    # test_set = dataset_class(
-    #     root=args.data_root,
-    #     train=False,
-    #     transform=transform,
-    #     download=True)
 
-    # train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
     mixup_args = dict(
         mixup_alpha=0.8, cutmix_alpha=1.0, cutmix_minmax=None,
         prob=1.0, switch_prob=0.5, mode='batch',
         label_smoothing=0.1, num_classes=num_classes
     )
     collate_fn = FastCollateMixup(**mixup_args)
-    
     
     dataset_train = create_dataset(
         args.dataset,
@@ -264,26 +241,6 @@ def main():
         pin_memory=False,
     )
     
-    
-    # test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
-
-    # if args.model == 'vit':
-        # from models.vit import get_model
-        # weights = args.infer
-        # model = get_model(
-        #     input_shape=input_shape,
-        #     depth=4, 
-        #     num_heads=4, 
-        #     patch_size=14, 
-        #     embed_dim=256, 
-        #     weights=weights,
-        # )
-        # if weights:
-        #     model.to(args.device)
-        #     val_epoch_acc = test(test_loader, model, args.device)
-        #     print(f'val_acc={val_epoch_acc:.4f}')
-        #     exit()
-        
     model_name = args.output_name
     
     model = create_model(

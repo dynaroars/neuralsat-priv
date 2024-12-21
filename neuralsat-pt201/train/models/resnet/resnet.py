@@ -94,12 +94,12 @@ class ResNet(nn.Module):
 @register_model
 def resnet_toy(*args, **kwargs):
     return ResNet(
-        block=BasicBlockBN, 
-        num_blocks=[3, 3, 3],
+        block=BasicBlock, 
+        num_blocks=[2, 2, 2],
         num_classes=10, 
         option='B', 
-        in_planes=8, 
-        hidden_planes=20)
+        in_planes=3, 
+        hidden_planes=5)
 
 
 if __name__ == "__main__":

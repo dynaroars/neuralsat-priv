@@ -387,7 +387,7 @@ def _get_optimized_bounds(
                     
         ret_l, ret_u = ret[0], ret[1]
 
-        if i == 0 or 1: # FIXME: backward twice error
+        if i == 0: # FIXME: backward twice error
             # save results at the first iteration
             best_ret = []
             best_ret_l = _save_ret_first_time(ret[0], float('-inf'), x, best_ret)

@@ -7,4 +7,4 @@ python3 -m scripts.train_recon --config config/cifar10_3_2.yaml --dataset cifar1
 python3 -m scripts.train_recon --config config/cifar10_4_1.yaml --dataset cifar10
 python3 -m scripts.train_recon --config config/cifar10_4_2.yaml --dataset cifar10
 
-python3 -m scripts.train_classification --dataset torch/cifar10 --batch_size 128 --max_epoch 5000 --model resnet --output_folder resnet --output_name resnet6
+python3 -m scripts.train_classification --dataset torch/cifar10 --batch_size 128 --max_epoch 5000 --output_folder cnn --output_name cnn_deep --saver
