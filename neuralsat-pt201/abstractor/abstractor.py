@@ -150,7 +150,9 @@ class NetworkAbstractor:
     
         if math.prod(self.input_shape) >= 100000:
             return True
-        
+    
+        return True # TODO: remove
+    
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
             self.net.init_alpha(x=(x,), share_alphas=share_alphas) if method == 'crown-optimized' else None
