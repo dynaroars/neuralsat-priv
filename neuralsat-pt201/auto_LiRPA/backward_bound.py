@@ -816,6 +816,9 @@ def get_alpha_crown_start_nodes(
     will propagate through this node. Each element in the list is a tuple with 3 elements:
     (following_node_name, following_node_shape, unstable_idx)
     """
+    # print(f'[+] get_alpha_crown_start_nodes: {share_alphas=}')
+    # assert len(share_alphas)
+    
     # When use_full_conv_alpha is True, conv layers do not share alpha.
     sparse_intermediate_bounds = self.bound_opts.get('sparse_intermediate_bounds', False)
     use_full_conv_alpha_thresh = self.bound_opts.get('use_full_conv_alpha_thresh', 512)

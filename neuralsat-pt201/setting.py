@@ -58,7 +58,7 @@ class GlobalSettings:
         self.test = 0
         
         # abstraction
-        self.share_alphas = 0 
+        self.share_alphas = []
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000
         self.forward_dynamic = 0
@@ -101,7 +101,7 @@ class GlobalSettings:
         # self.restart_max_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
-        self.share_alphas = 0 # sharing alphas may lose precision
+        self.share_alphas = [] # sharing alphas may lose precision
             
         
     def __repr__(self):
@@ -117,7 +117,7 @@ class GlobalSettings:
             f'\t- restart                                : {bool(self.use_restart)}\n'
             f'\t- stabilize (CPU)                        : {bool(self.use_mip_tightening)}\n'
             f'\t- stabilize (GPU)                        : {bool(self.use_gpu_tightening)}\n'
-            f'\t- share alphas                           : {bool(self.share_alphas)}\n'
+            f'\t- share alphas                           : {self.share_alphas}\n'
             f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
             f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
             f'\n'

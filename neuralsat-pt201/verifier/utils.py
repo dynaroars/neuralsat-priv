@@ -96,8 +96,12 @@ def _mip_attack(self: verifier.verifier.Verifier, reference_bounds: dict | None)
     
     
 @beartype
-def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_split: str | None = None) -> tuple:
+def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_split: str | None = None, share_alphas: list = []) -> tuple:
     # determine search algorithm
+    
+    # print(f'[+] Preprocess: {share_alphas=}')
+    # assert len(share_alphas)
+    
     self.refined_betas = None
     
     diff = objectives.upper_bounds - objectives.lower_bounds
@@ -128,7 +132,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     try:
         # self._init_abstractor('crown-optimized', objectives)
-        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives)
+        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', objectives, share_alphas=share_alphas)
     except:
         print('Failed to initialize abstractor')
         return objectives, None
@@ -140,7 +144,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     
     # forward
     try:
-        ret = self.abstractor.initialize(tmp_objective, short_cut=True)
+        ret = self.abstractor.initialize(tmp_objective, short_cut=True, share_alphas=share_alphas)
     except:
         print('[!] Failed to preprocess objectives')
         if os.environ.get("NEURALSAT_DEBUG"):
@@ -200,7 +204,7 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
             
             # forward with refinement
             refined_intermediate_bounds = self.abstractor.net.get_refined_interm_bounds()
-            ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds)
+            ret = self.abstractor.initialize(tmp_objective, reference_bounds=refined_intermediate_bounds, share_alphas=share_alphas)
             
             # pruning
             remaining_index = torch.where((ret.output_lbs.detach().cpu() <= tmp_objective.rhs.detach().cpu()).all(1))[0]
@@ -257,7 +261,11 @@ def _check_timeout(self: verifier.verifier.Verifier, timeout: int | float) -> bo
 
 
 @beartype
-def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, extra_opts: dict = {}) -> None:
+def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: typing.Any, 
+                     extra_opts: dict = {}, share_alphas: list = []) -> None:
+    # print(f'[+] _init_abstractor: {share_alphas=}')
+    # assert len(share_alphas)
+        
     if hasattr(self, 'abstractor'):
         # del self.abstractor.net
         del self.abstractor
@@ -270,12 +278,20 @@ def _init_abstractor(self: verifier.verifier.Verifier, method: str, objective: t
         device=self.device,
     )
 
-    self.abstractor.setup(objective, extra_opts=extra_opts)
+    self.abstractor.setup(objective, extra_opts=extra_opts, share_alphas=share_alphas)
     self.abstractor.net.get_split_nodes()
+    
+    alphas = [
+        n.name for n in self.abstractor.net.get_enabled_opt_act()
+    ]
+    print(f'{alphas=}')
     
 
 @beartype
-def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any, share_alphas: list = []) -> None | dict:
+    # print(f'[+] _setup_restart_naive: {share_alphas=}')
+    # assert len(share_alphas)
+    
     self.num_restart = nth_restart + 1
     # TODO: select splitting method (input/hidden)
     if objective is not None:
@@ -303,12 +319,15 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         decision_method=params['decision_method'],
     )
         
-    self._init_abstractor(params['abstract_method'], objective, params['extra_opts'])
+    self._init_abstractor(params['abstract_method'], objective, params['extra_opts'], share_alphas=share_alphas)
         
 
 
 @beartype
-def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any) -> None | dict:
+def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective: typing.Any, share_alphas: list = []) -> None | dict:
+    # print(f'[+] Setup restart: {share_alphas=}')
+    # assert len(share_alphas)
+
     self.num_restart = nth_restart + 1
     params = get_restart_strategy(nth_restart, input_split=self.input_split)
     if params is None:
@@ -343,7 +362,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # skip refine for general activation layers
             pass
         else:
-            self._init_abstractor('backward', objective)
+            self._init_abstractor('backward', objective, share_alphas=share_alphas)
             
             tmp_objective = copy.deepcopy(objective)
             tmp_objective.lower_bounds = tmp_objective.lower_bounds[0:1].to(self.device)
@@ -351,7 +370,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
             # tmp_objective.rhs = tmp_objective.rhs.to(self.device) # TODO: check
             c_to_use = tmp_objective.cs.transpose(0, 1).to(self.device) if tmp_objective.cs.shape[1] == 1 else None
             
-            ret = self.abstractor.initialize(tmp_objective)
+            ret = self.abstractor.initialize(tmp_objective, share_alphas=share_alphas)
             self.abstractor.build_lp_solver(
                 model_type='mip', 
                 input_lower=tmp_objective.lower_bounds.view(self.input_shape), 
@@ -365,7 +384,7 @@ def _setup_restart(self: verifier.verifier.Verifier, nth_restart: int, objective
     
     # abstractor
     if (not hasattr(self, 'abstractor')) or (abstract_method != self.abstractor.method):
-        self._init_abstractor(abstract_method, objective)
+        self._init_abstractor(abstract_method, objective, share_alphas=share_alphas)
         
     return refined_intermediate_bounds
 
@@ -571,14 +590,6 @@ def _check_full_assignment(self: verifier.verifier.Verifier, domain_params: Abst
     return None, remaining_indices
 
     
-@beartype
-def compute_stability(self: verifier.verifier.Verifier, dnf_objectives: verifier.objective.DnfObjectives) -> tuple[int, int, list, list]:
-    if not (hasattr(self, 'abstractor')):
-        self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
-        
-    return self.abstractor.compute_stability(dnf_objectives)
-
-        
 @beartype
 def _save_stats(self: verifier.verifier.Verifier) -> None:
     for k, v in self._get_learned_conflict_clauses().items():

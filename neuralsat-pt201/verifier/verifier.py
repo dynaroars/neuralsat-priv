@@ -68,28 +68,28 @@ class Verifier:
     
     
     @beartype
-    def compute_stability(self: 'Verifier', dnf_objectives: 'DnfObjectives'):
-        print('compute_stability')
-        if not (hasattr(self, 'abstractor')):
-            self._init_abstractor('backward' if np.prod(self.input_shape) < 100000 else 'forward', dnf_objectives)
-            
-        return self.abstractor.compute_stability(dnf_objectives)
-    
-    
-    @beartype
-    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], timeout: int | float = 3600.0, force_split: str | None = None) -> str:
+    def verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list = [], 
+               timeout: int | float = 3600.0, force_split: str | None = None, share_alphas: list = []) -> str:
+        # print(f'[+] Verify: {share_alphas=}')
+        # assert len(share_alphas)
+
         self.start_time = time.time()
         self.status = self._verify(
             dnf_objectives=dnf_objectives,
             preconditions=preconditions,
             timeout=timeout,
             force_split=force_split,
+            share_alphas=share_alphas,
         )
         return self.status
     
     
     @beartype
-    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, timeout: int | float = 3600.0, force_split: str | None = None) -> str:
+    def _verify(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
+                timeout: int | float = 3600.0, force_split: str | None = None, share_alphas: list = []) -> str:
+        # print(f'[+] _Verify: {share_alphas=}')
+        # assert len(share_alphas)
+        
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
         
@@ -102,7 +102,7 @@ class Verifier:
 
         # refine
         Timers.tic('Preprocess') if Settings.use_timer else None
-        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
+        dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split, share_alphas=share_alphas)
         Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
@@ -117,7 +117,8 @@ class Verifier:
             preconditions=preconditions,
             timeout=timeout,
             reference_bounds=reference_bounds,
-            max_domain=self.batch
+            max_domain=self.batch,
+            share_alphas=share_alphas,
         )
         
         if not status:
@@ -126,14 +127,19 @@ class Verifier:
                 preconditions=preconditions,
                 timeout=timeout,
                 reference_bounds=reference_bounds,
-                max_domain=1
+                max_domain=1,
+                share_alphas=share_alphas,
             )
             
         return status
         
     @beartype    
     def _verify_with_restart(self: 'Verifier', dnf_objectives: 'DnfObjectives', preconditions: list, 
-                             timeout: int | float = 3600.0, reference_bounds: None | dict = None, max_domain: int = 1) -> str | None:
+                             timeout: int | float = 3600.0, reference_bounds: None | dict = None, 
+                             max_domain: int = 1, share_alphas: list = []) -> str | None:
+        # print(f'[+] _verify_with_restart: {share_alphas=}')
+        # assert len(share_alphas)
+        
         # verify
         while len(dnf_objectives):
             Timers.tic('Get objective') if Settings.use_timer else None
@@ -151,7 +157,7 @@ class Verifier:
             while True:
                 # get strategy + refinement
                 Timers.tic('Setup restart') if Settings.use_timer else None
-                new_reference_bounds = self._setup_restart(nth_restart, objective)
+                new_reference_bounds = self._setup_restart(nth_restart, objective, share_alphas=share_alphas)
                 Timers.toc('Setup restart') if Settings.use_timer else None
                 
                 # adaptive batch size
@@ -163,7 +169,8 @@ class Verifier:
                             objective=objective, 
                             preconditions=learned_clauses, 
                             reference_bounds=reference_bounds if new_reference_bounds is None else new_reference_bounds,
-                            timeout=timeout
+                            timeout=timeout,
+                            share_alphas=share_alphas,
                         )
                     except RuntimeError as exception:
                         if os.environ.get("NEURALSAT_DEBUG"):
@@ -219,10 +226,13 @@ class Verifier:
                 
         
     @beartype
-    def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None) -> DomainsList | list:
+    def _initialize(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, share_alphas: list = []) -> DomainsList | list:
         # initialization params
+        # print(f'[+] _initialize: {share_alphas=}')
+        # assert len(share_alphas)
+
         # TODO: fix init_betas found by MIP
-        ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds)
+        ret = self.abstractor.initialize(objective, reference_bounds=reference_bounds, share_alphas=share_alphas)
 
         # check verified
         assert len(ret.output_lbs) == len(objective.cs)
@@ -252,10 +262,18 @@ class Verifier:
         
         
     @beartype
-    def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float) -> str:
+    def _verify_one(self: 'Verifier', objective, preconditions: dict, reference_bounds: dict | None, timeout: int | float, share_alphas: list = []) -> str:
         # initialization
+        # print(f'[+] _verify_one: {share_alphas=}')
+        # assert len(share_alphas)
+        
         Timers.tic('Initialization') if Settings.use_timer else None
-        self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
+        self.domains_list = self._initialize(
+            objective=objective, 
+            preconditions=preconditions, 
+            reference_bounds=reference_bounds, 
+            share_alphas=share_alphas,
+        )
         Timers.toc('Initialization') if Settings.use_timer else None
                 
         # cleaning
@@ -473,7 +491,7 @@ class Verifier:
         _get_learned_conflict_clauses, _check_full_assignment,
         _check_invoke_cpu_tightening, _update_tightening_patience,
         _check_invoke_gpu_tightening,
-        compute_stability, _save_stats, get_stats,
+        _save_stats, get_stats,
         _prune_objective,
         get_unsat_core, get_proof_tree, export_proof,
     )

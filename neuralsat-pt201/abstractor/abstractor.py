@@ -48,22 +48,25 @@ class NetworkAbstractor:
         return self._split_points
         
     @beartype
-    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> None:
-        if self.select_params(objective, extra_opts=extra_opts):
+    def setup(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}, share_alphas: list = []) -> None:
+        # print(f'[+] setup: {share_alphas=}')
+        # assert len(share_alphas)
+        
+        if self.select_params(objective, extra_opts=extra_opts, share_alphas=share_alphas):
             logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=} {extra_opts=}')
             return None
         
         # FIXME: try special settings for ViT
         new_extra_opts = copy.deepcopy(extra_opts)
         new_extra_opts.update({'sparse_intermediate_bounds': False})
-        if self.select_params(objective, extra_opts=new_extra_opts):
+        if self.select_params(objective, extra_opts=new_extra_opts, share_alphas=share_alphas):
             logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {new_extra_opts=}')
             return None
             
         # FIXME: try smaller backward batch size
         Settings.backward_batch_size = 512
         while Settings.backward_batch_size >= 1:
-            if self.select_params(objective, extra_opts=extra_opts):
+            if self.select_params(objective, extra_opts=extra_opts, share_alphas=share_alphas):
                 logger.info(f'[setup] Initialized abstractor: {self.mode=}, {self.method=}, {self.input_split=}, {Settings.backward_batch_size=} {extra_opts=}')
                 return None 
             Settings.backward_batch_size = Settings.backward_batch_size // 2
@@ -72,7 +75,10 @@ class NetworkAbstractor:
         raise
             
     @beartype
-    def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}) -> bool:
+    def select_params(self: 'NetworkAbstractor', objective: typing.Any, extra_opts: dict = {}, share_alphas: list = []) -> bool:
+        # print(f'[+] select_params: {share_alphas=}')
+        # assert len(share_alphas)
+        
         params = [
             ['patches', self.method], # default
             ['matrix', self.method],
@@ -86,7 +92,7 @@ class NetworkAbstractor:
         for mode, method in params:
             logger.debug(f'[select_params] Try {mode=}, {method=}, {self.input_split=} {extra_opts=}')
             self._init_module(mode=mode, objective=objective, extra_opts=extra_opts)
-            if self._check_module(method=method, objective=objective):
+            if self._check_module(method=method, objective=objective, share_alphas=share_alphas):
                 self.mode = mode
                 self.method = method
                 return True
@@ -124,7 +130,10 @@ class NetworkAbstractor:
         
         
     @beartype
-    def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any) -> bool:
+    def _check_module(self: 'NetworkAbstractor', method: str, objective: typing.Any, share_alphas: list = []) -> bool:
+        # print(f'[+] _check_module: {share_alphas=}')
+        # assert len(share_alphas)
+        
         # at least can run with batch=1
         if objective:
             x_L = objective.lower_bounds[0].view(self.input_shape)
@@ -142,11 +151,9 @@ class NetworkAbstractor:
         if math.prod(self.input_shape) >= 100000:
             return True
         
-        return True # TODO: remove
-    
         try:
             self.net.set_bound_opts(get_check_abstractor_params())
-            self.net.init_alpha(x=(x,)) if method == 'crown-optimized' else None
+            self.net.init_alpha(x=(x,), share_alphas=share_alphas) if method == 'crown-optimized' else None
             lb, _ = self.net.compute_bounds(x=(x,), method=method) # FIXME: this uses a lot of RAM
             assert not torch.isnan(lb).any()
         except KeyboardInterrupt:
@@ -171,6 +178,9 @@ class NetworkAbstractor:
     def initialize(self: 'NetworkAbstractor', objective: typing.Any, 
                    share_alphas: list = [], reference_bounds: dict | None = None, 
                    short_cut: bool = False) -> AbstractResults:
+        # print(f'[+] Abstractor init: {share_alphas=}')
+        # assert len(share_alphas)
+        
         objective.cs = objective.cs.to(self.device)
         objective.rhs = objective.rhs.to(self.device)
         
@@ -451,81 +461,6 @@ class NetworkAbstractor:
         forward_func = self._forward_input if self.input_split else self._forward_hidden
         return forward_func(domain_params=domain_params, decisions=decisions, simplify=False)
 
-    
-    # TODO: experimental function
-    def compute_bounds(self, input_lowers, input_uppers, method, cs=None, rhs=None, reference_bounds=None, reuse_alpha=False):
-        assert method in ['backward', 'crown-optimized']
-        if os.environ.get('NEURALSAT_ASSERT'):
-            assert not torch.equal(input_lowers, input_uppers)
-        
-        # perturbed input
-        x = self.new_input(x_L=input_lowers, x_U=input_uppers)
-
-        # get split nodes
-        self.net.get_split_nodes()
-    
-        # if Settings.share_alphas:
-        #     print(f'[!] Using {Settings.share_alphas=} will lose precision.')
-        coeffs = None
-        
-        # if reuse_alpha:
-        #     with torch.no_grad():
-        #         lb, ub, = self.net.compute_bounds(
-        #             x=(x,), 
-        #             C=cs, 
-        #             method='backward', 
-        #             reuse_alpha=reuse_alpha,
-        #             # interm_bounds=new_intermediate_layer_bounds
-        #         )
-        #     return (lb, ub), coeffs
-
-        # setup options for optimization mode
-        self.net.set_bound_opts(get_initialize_opt_params(lambda x: False))
-        
-        # backward mode
-        lb, ub, aux_reference_bounds = self.net.init_alpha(
-            x=(x,), 
-            c=cs, 
-            share_alphas=Settings.share_alphas, 
-            bound_upper=True,
-        )
-        assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
-        # print(f'Inititial bounds with {method=}:', lb.detach().cpu())
-        
-        if method == 'backward':
-            lA, uA, lbias, ubias = self.get_input_A(self.device)
-            coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
-            return (lb, ub), coeffs
-
-        # lower bound
-        lb, _ = self.net.compute_bounds(
-            x=(x,), 
-            C=cs,
-            method=method,
-            aux_reference_bounds=aux_reference_bounds, 
-            reference_bounds=reference_bounds,
-            bound_lower=True,
-            bound_upper=False,
-        )
-        lA, _, lbias, _ = self.get_input_A(self.device)
-        # print(f'Optimized bounds with {method=}:', lb.detach().cpu())
-        
-        # upper bound
-        _, ub = self.net.compute_bounds(
-            x=(x,), 
-            C=cs,
-            method=method,
-            aux_reference_bounds=aux_reference_bounds, 
-            reference_bounds=reference_bounds,
-            bound_lower=False,
-            bound_upper=True,
-        )
-        _, uA, _, ubias = self.get_input_A(self.device)
-        coeffs = CoefficientMatrix(lA=lA, uA=uA, lbias=lbias, ubias=ubias)
-        assert torch.all(lb <= ub + 1e-6), f'{(lb > ub).sum()} {lb[lb > ub]} {ub[lb > ub]}'
-        
-        return (lb, ub), coeffs
-        
         
     def __repr__(self):
         return f'{self.__class__.__name__}({self.mode}, {self.method})'

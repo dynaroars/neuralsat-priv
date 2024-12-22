@@ -121,7 +121,8 @@ if __name__ == '__main__':
     )
     
     print(Settings)
-    
+    share_alphas = []
+        
     # verify
     Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
@@ -129,6 +130,7 @@ if __name__ == '__main__':
         dnf_objectives=copy.deepcopy(dnf_objectives), 
         timeout=timeout, 
         force_split=args.force_split,
+        share_alphas=share_alphas
     )
     runtime = time.time() - START_TIME
     Timers.toc('Verify') if Settings.use_timer else None

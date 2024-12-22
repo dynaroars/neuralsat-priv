@@ -313,8 +313,8 @@ def _get_optimized_bounds(
     else:
         raise NotImplementedError(opt_choice)
 
-    num_params = sum(p.numel() for group in opt.param_groups for p in group['params'] if p.requires_grad)
-    print(f'{num_params=}')
+    num_optimized_params = sum(p.numel() for group in opt.param_groups for p in group['params'] if p.requires_grad)
+    print(f'[+] {num_optimized_params=}')
     
     # Create a weight vector to scale learning rate.
     loss_weight = torch.ones(size=(x[0].size(0),), device=x[0].device)
@@ -626,6 +626,10 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=[], method='backward',
                c=None, bound_lower=True, bound_upper=True, final_node_name=None,
                interm_bounds=None, activation_opt_params=None,
                skip_bound_compute=False):
+    
+    # print(f'[+] init_alpha: {share_alphas=}')
+    # assert len(share_alphas)
+    
     self(*x) # Do a forward pass to set perturbed nodes
     final = (self.final_node() if final_node_name is None
              else self[final_node_name])
