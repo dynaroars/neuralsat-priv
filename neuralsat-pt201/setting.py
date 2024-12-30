@@ -101,7 +101,7 @@ class GlobalSettings:
         # self.restart_max_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
-        self.share_alphas = 0 # sharing alphas may lose precision
+        self.share_alphas = 1 # sharing alphas may lose precision
             
         
     def __repr__(self):

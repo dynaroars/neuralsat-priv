@@ -34,6 +34,13 @@ from auto_LiRPA import BoundedTensor, BoundedModule
 
 InOutBounds = namedtuple('InputOutputBounds', ['under_input', 'under_output', 'over_input', 'over_output'], defaults=(None,) * 4)
 
+def get_used_gpu_memory():
+    device = torch.device('cuda:0')
+    free, total = torch.cuda.mem_get_info(device)
+    mem_used_MB = (total - free) / 1024 ** 2
+    torch.cuda.empty_cache()
+    return mem_used_MB
+
 def redundant_compute_bounds(net, input_lowers, input_uppers, cs, method='backward'):
     assert method in ['backward', 'crown-optimized']
     new_x = BoundedTensor(input_lowers, PerturbationLpNorm(x_L=input_lowers, x_U=input_uppers)).to(input_uppers)
@@ -215,6 +222,7 @@ class DecompositionalVerifier:
                 output_batch=interm_batch,
             )
             
+            print(f'[+] Init bounds subnet {idx+1}/{n_subnets} {method=}:', get_used_gpu_memory(), 'MB')
             # exit()
             
             # # DEBUG: check correctness
@@ -314,6 +322,9 @@ class DecompositionalVerifier:
             batch=3,
             timeout=verify_timeout,
         )
+        
+        print(f'[+] verify_dnf_pairs:', get_used_gpu_memory(), 'MB')
+        
         # print(f'{len(verified_candidates)=}')
         # FIXME: handle attack
         # if len(attack_samples) and subnet_idx==0:
@@ -428,6 +439,8 @@ class DecompositionalVerifier:
         self.reset()
         
         lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method='crown-optimized', interm_batch=interm_batch)
+        print('[+] _init_interm_bounds:', get_used_gpu_memory(), 'MB')
+        
         # lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method='backward', interm_batch=interm_batch)
         # assert all([i == 0.0 for i in objective.rhs.flatten()]), f'{objective.rhs=}'
         stop_criterion_func = stop_criterion_batch_any(objective.rhs.to(lb))
@@ -452,6 +465,7 @@ class DecompositionalVerifier:
                         verify_timeout=10.0,
                         tighten_batch=tighten_batch,
                     )
+                    print(f'[+] _under_estimate {subnet_idx=}:', get_used_gpu_memory(), 'MB')
                     
                     if os.environ.get("NEURALSAT_LOG_SUBVERIFIER"):
                         print('###################')
@@ -470,8 +484,9 @@ class DecompositionalVerifier:
                 subnet_idx=n_subnets-1, 
                 objective=copy.deepcopy(objective), 
                 verify_batch=verify_batch,
-                timeout=500.0,
+                timeout=min(timeout, 200.0),
             )
+            print(f'[+] verify last:', get_used_gpu_memory(), 'MB')
             # exit()
             
             if status not in [ReturnStatus.TIMEOUT, ReturnStatus.SAT]:

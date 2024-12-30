@@ -113,7 +113,7 @@ def test_vae():
     
     print(Settings)
     device = 'cuda'
-    model_name = 'cifar10_3'
+    model_name = 'cifar10_4_2'
     eps = 0.001
     benchmark_dir = f'example/generated_benchmark/vae_robust/{model_name}/eps_{eps:.06f}'
     # benchmark_dir = f'example/generated_benchmark/resnet_no_bn/eps_{eps:.06f}_{model_name}'
@@ -126,24 +126,27 @@ def test_vae():
     for idx, inst in enumerate(tqdm.tqdm(instances, desc=model_name)):
         # if idx != 2:
             # continue
-        # if idx < 1085: 
-            # continue
+        if idx < 12123: 
+            continue
         output_file = f'{output_dir}/{idx}.res'
         if os.path.exists(output_file):
             res = open(output_file).read()
             if 'sat' in res:
                 continue
             
-            if ',timeout,' in res:
-                continue
+            # if ',timeout,' in res:
+            #     continue
             
             if ',error,' in res:
                 continue
             
-            val = eval(res.split(',unknown,')[0])
-            if val.item() < -1.0:
-                print(f'Skipping {val=}')
-                continue
+            if ',unknown,' in res:
+                val = eval(res.split(',unknown,')[0])
+                if val.item() < -1.0 or val.item() > 1.0:
+                    print(f'Skipping {val=}')
+                    continue
+        else:
+            continue
             
         net_path = f'{benchmark_dir}/{inst[0]}'
         vnnlib_path = f'{benchmark_dir}/{inst[1]}'
@@ -174,7 +177,7 @@ def test_vae():
         
         # objective = dnf_objectives.pop(1)
         try:
-            status, lb = verifier.decompositional_verify(dnf_objectives, timeout=1800, batch=500)
+            status, lb = verifier.decompositional_verify(dnf_objectives, timeout=1200, batch=500)
             print(f'{lb=}')
             with open(output_file, 'w') as fp:
                 print(f'{lb},{status},{net_path},{vnnlib_path}', file=fp)
@@ -190,7 +193,6 @@ def test_vae():
             import traceback; traceback.print_exc()
             pass
             # raise
-        # exit()
              
 if __name__ == "__main__":
     # test_resnet()

@@ -359,16 +359,15 @@ def main_robust():
 
     with open(csv_path, 'w') as fp:
         for i, (x, y) in enumerate(pbar):
-            pbar.set_postfix(total=total, skip=skip)
             x = x.to(args.device)
             y = new_model(x)
-            diff = (x - y).abs().amax().item()
+            diff = (x - y).abs().mean().item()
             # print(f'{i=} {diff=}')
-            if diff > 0.3:
+            if diff > 0.1:
                 skip += 1
                 continue
             
-            for j in range(10):
+            for j in range(5):
                 # j = random.randint(0, x.numel())
                 spec_name = f'spec_idx_{i}_{j}_net_{args.model_name}_eps_{args.eps:.06f}_seed_{args.seed}.vnnlib'
                 write_vnnlib_recon_robust(
@@ -384,6 +383,7 @@ def main_robust():
         
                 print(f'net/{args.model_name}.onnx,spec/{spec_name},{args.timeout}', file=fp)
             
+            pbar.set_postfix(total=total, skip=skip, diff=diff)
             
 if __name__ == '__main__':
     main_robust()

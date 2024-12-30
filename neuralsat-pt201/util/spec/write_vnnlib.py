@@ -95,7 +95,7 @@ def write_vnnlib_recon_robust(
         else:
             f.write(f"(assert (or\n")
             for i in indices:
-                f.write(f"\t(and (>= Y_{i} {y_ub[i]}))\n")
+                # f.write(f"\t(and (>= Y_{i} {y_ub[i]}))\n")
                 f.write(f"\t(and (<= Y_{i} {y_lb[i]}))\n")
             f.write(f"))\n")
     return spec_path

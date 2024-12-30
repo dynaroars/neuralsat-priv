@@ -109,11 +109,11 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
         output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach().numpy()
         # print('output_pytorch:', output_pytorch)
         correct_conversion = np.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
-        print('correct_conversion:', torch.norm(
-            output_onnx - torch.from_numpy(output_pytorch)
-        ))
+        print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
     except:
         raise OnnxConversionError
+    
+    assert correct_conversion
 
     return pytorch_model, batched_input_shape, batched_output_shape, is_nhwc
 
@@ -245,3 +245,32 @@ def parse_onnx(path: str | io.BytesIO) -> tuple:
             exit()
             
             
+            
+            
+def parse_pth(pth_path: str) -> tuple:
+    # onnx_path = pth_path.replace('.pth', '.onnx')
+    # onnx_model, input_shape, output_shape, is_nhwc = parse_onnx(onnx_path)
+    pytorch_model = torch.load(pth_path)
+    
+    input_shape = (1, 3, 32, 32)
+    output_shape = (1, 10)
+    is_nhwc = False
+    
+    # # check conversion
+    # correct_conversion = True
+    # batch = 2
+    # dummy = torch.randn(batch, *input_shape[1:], dtype=torch.get_default_dtype())
+    # # print(dummy.shape)
+    # output_onnx = torch.cat([
+    #     torch.from_numpy(inference_onnx(onnx_path, dummy[i].view(input_shape).float().numpy())[0]).view(output_shape) 
+    #         for i in range(batch)
+    # ])
+    # # print('output_onnx:', output_onnx)
+    # output_pytorch = pytorch_model(dummy.permute(0, 3, 1, 2) if is_nhwc else dummy).detach()
+    # # print('output_pytorch:', output_pytorch)
+    # correct_conversion = torch.allclose(output_pytorch, output_onnx, 1e-5, 1e-5)
+    # print('correct_conversion:', torch.norm(output_onnx - output_pytorch))
+    
+    # assert correct_conversion
+
+    return pytorch_model, input_shape, output_shape, is_nhwc
