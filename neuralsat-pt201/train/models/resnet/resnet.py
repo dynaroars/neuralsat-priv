@@ -115,6 +115,29 @@ def resnet_deep(*args, **kwargs):
         hidden_planes=24)
 
 
+
+@register_model
+def resnet_deep_2(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[2, 2, 3],
+        num_classes=10, 
+        option='B', 
+        in_planes=32, 
+        hidden_planes=24)
+
+
+@register_model
+def resnet_deep_3(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[3, 3, 3],
+        num_classes=10, 
+        option='B', 
+        in_planes=32, 
+        hidden_planes=24)
+
+
 @register_model
 def resnet_wide(*args, **kwargs):
     return ResNet(
@@ -125,6 +148,16 @@ def resnet_wide(*args, **kwargs):
         in_planes=64, 
         hidden_planes=64)
 
+
+@register_model
+def resnet_wide_2(*args, **kwargs):
+    return ResNet(
+        block=BasicBlock, 
+        num_blocks=[1, 1, 1],
+        num_classes=10, 
+        option='B', 
+        in_planes=64, 
+        hidden_planes=96)
 
 @register_model
 def resnet_toy(*args, **kwargs):

@@ -36,7 +36,7 @@ if __name__ == '__main__':
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--batch', type=int, default=1000,
+    parser.add_argument('--batch', type=int, default=500,
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
@@ -121,8 +121,18 @@ if __name__ == '__main__':
     )
     
     print(Settings)
-    share_alphas = []
+    # deep
+    share_alphas = ['/79', '/input.8', '/85', '/input.16', '/91', '/input.24', '/97', '/input.32', '/103', '/input.40', '/109', '/113']
+    # share_alphas = share_alphas[:-4]
+    share_alphas = ['/input.16', '/input.24', '/input.32', '/103', '/109', '/113']
         
+    # wide
+    # share_alphas = ['/44', '/input.8', '/50', '/input.16', '/56', '/60']
+    
+    # base 
+    # share_alphas = ['/44', '/input.8', '/50', '/input.16', '/56', '/60']
+    # share_alphas = []
+    
     # verify
     Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)

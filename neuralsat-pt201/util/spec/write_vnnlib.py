@@ -6,7 +6,8 @@ def write_vnnlib_classify(
     spec_path: str,  
     data_lb: float, data_ub: float, 
     prediction: torch.Tensor,
-    negate_spec=False) -> str:
+    negate_spec=False,
+    seed: int = 0) -> str:
     # input bounds
     x_lb = data_lb.flatten()
     x_ub = data_ub.flatten()
@@ -16,7 +17,7 @@ def write_vnnlib_classify(
     y = prediction.argmax(-1).item()
     
     with open(spec_path, "w") as f:
-        f.write(f"; Specification for class {int(y)}\n")
+        f.write(f"; Specification for class {int(y)} {seed=}\n")
 
         f.write(f"\n; Definition of input variables\n")
         for i in range(len(x_ub)):

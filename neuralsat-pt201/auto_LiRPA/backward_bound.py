@@ -118,7 +118,6 @@ def backward_general(
     use_beta_crown = self.bound_opts['optimize_bound_args']['enable_beta_crown']
 
     roots = self.roots()
-
     if start_backpropagation_at_node is None:
         # When output constraints are used, backward_general_with_output_constraint()
         # adds additional layers at the end, performs the backpropagation through these,
@@ -130,6 +129,8 @@ def backward_general(
         # backpropagation starts.
         start_backpropagation_at_node = bound_node
 
+    # print(f'Bound backward from {start_backpropagation_at_node.__class__.__name__}({start_backpropagation_at_node.name})')
+        
     if verbose:
         logger.debug(f'Bound backward from {start_backpropagation_at_node.__class__.__name__}({start_backpropagation_at_node.name}) '
                      f'to bound {bound_node.__class__.__name__}({bound_node.name})')
@@ -315,6 +316,14 @@ def get_unstable_size(unstable_idx):
     else:
         return unstable_idx.numel()
 
+def _check_additional_sparsity(self, node):
+    for relu in self.relus:
+        if relu.name not in self.bound_opts['optimize_bound_args']['use_shared_alpha']:
+            continue
+        if node.name in [n.name for n in relu.inputs]:
+            return True
+    return False
+    
 
 def check_optimized_variable_sparsity(self: 'BoundedModule', node):
     alpha_sparsity = None  # unknown, optimizable variables are not created for this node.
@@ -325,7 +334,7 @@ def check_optimized_variable_sparsity(self: 'BoundedModule', node):
             if relu.alpha_lookup_idx[node.name] is not None:
                 # This node was created with sparse alpha
                 alpha_sparsity = True
-            elif node.name in self.bound_opts['optimize_bound_args']['use_shared_alpha']:
+            elif self._check_additional_sparsity(node):
                 # Shared alpha, the spec dimension is 1, and sparsity can be supported.
                 alpha_sparsity = True
             else:
@@ -337,7 +346,7 @@ def check_optimized_variable_sparsity(self: 'BoundedModule', node):
 def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                  ref_intermediate_lb=None, ref_intermediate_ub=None):
     sparse_conv_intermediate_bounds = self.bound_opts.get('sparse_conv_intermediate_bounds', False)
-    minimum_sparsity = self.bound_opts.get('minimum_sparsity', 0.9)
+    minimum_sparsity = self.bound_opts.get('minimum_sparsity', 1.0)
     crown_batch_size = self.bound_opts.get('crown_batch_size', 1e9)
     # print(f'{node=} {node.output_shape=}')
     dim = int(prod(node.output_shape[1:]))
@@ -353,8 +362,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
     # NOTE: batched CROWN is so far only supported for some of the cases below
 
     # FIXME: C matrix shape incorrect for BoundParams.
-    if (isinstance(node, BoundLinear) or isinstance(node, BoundMatMul)) and int(
-            os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0:
+    if (isinstance(node, BoundLinear) or isinstance(node, BoundMatMul)) and int(os.environ.get('AUTOLIRPA_USE_FULL_C', 0)) == 0:
         if sparse_intermediate_bounds:
             # If we are doing bound refinement and reference bounds are given,
             # we only refine unstable neurons.
@@ -391,8 +399,7 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 newC = eyeC([batch_size, dim, *node.output_shape[1:]], self.device)
     elif node.patches_start and node.mode == "patches":
         if sparse_intermediate_bounds:
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub, conv=True)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub, conv=True)
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
@@ -424,16 +431,15 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 None, 1, 0, [node.output_shape[1], batch_size, *node.output_shape[2:],
                 *node.output_shape[1:-2], 1, 1], 1,
                 output_shape=[batch_size, *node.output_shape[1:]])
-    elif (isinstance(node, (BoundAdd, BoundSub)) and node.mode == "patches"
-        and len(node.output_shape) >= 4):
+    elif (isinstance(node, (BoundAdd, BoundSub)) and node.mode == "patches" and len(node.output_shape) >= 4):
         # FIXME: BoundAdd does not always have patches. Need to use a better way
         # to determine patches mode.
         # FIXME: We should not hardcode BoundAdd here!
         if sparse_intermediate_bounds:
             if crown_batch_size < 1e9:
                 warnings.warn('Batched CROWN is not supported in this case')
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub, conv=True)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub, conv=True)
+            # print(f'\t[!] {unstable_idx is not None=} {unstable_size=} {node=} {alpha_is_sparse=}')
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
@@ -478,8 +484,8 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 batch_size, *node.output_shape[1:]])
     else:
         if sparse_intermediate_bounds:
-            unstable_idx, unstable_size = self.get_unstable_locations(
-                ref_intermediate_lb, ref_intermediate_ub)
+            unstable_idx, unstable_size = self.get_unstable_locations(ref_intermediate_lb, ref_intermediate_ub)
+            
             if unstable_size == 0:
                 # Do nothing, no bounds will be computed.
                 reduced_dim = True
@@ -512,7 +518,6 @@ def get_sparse_C(self: 'BoundedModule', node, sparse_intermediate_bounds=True,
                 newC = torch.eye(dim, device=self.device).unsqueeze(0).expand(
                     batch_size, -1, -1
                 ).view(batch_size, dim, *node.output_shape[1:])
-
     return newC, reduced_dim, unstable_idx, unstable_size
 
 
@@ -816,7 +821,7 @@ def get_alpha_crown_start_nodes(
     will propagate through this node. Each element in the list is a tuple with 3 elements:
     (following_node_name, following_node_shape, unstable_idx)
     """
-    # print(f'[+] get_alpha_crown_start_nodes: {share_alphas=}')
+    print(f'[+] get_alpha_crown_start_nodes: {node=} {share_alphas=}')
     # assert len(share_alphas)
     
     # When use_full_conv_alpha is True, conv layers do not share alpha.

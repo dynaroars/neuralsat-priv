@@ -71,8 +71,10 @@ def opt_no_reuse(self: 'BoundedModule'):
 def _set_alpha(optimizable_activations, parameters, alphas, lr):
     """Set best_alphas, alphas and parameters list."""
     for node in optimizable_activations:
-        alphas.extend(list(node.alpha.values()))
+        # alphas.extend(list(node.alpha.values()))
+        alphas.extend(list(node.alpha_opt.values()))
         node.opt_start()
+
     # Alpha has shape (2, output_shape, batch_dim, node_shape)
     parameters.append({'params': alphas, 'lr': lr, 'batch_dim': 2})
     # best_alpha is a dictionary of dictionary. Each key is the alpha variable
@@ -85,7 +87,7 @@ def _set_alpha(optimizable_activations, parameters, alphas, lr):
             best_alphas[m.name][alpha_m] = m.alpha[alpha_m].detach().clone()
             # We will directly replace the dictionary for each activation layer after
             # optimization, so the saved alpha might not have require_grad=True.
-            m.alpha[alpha_m].requires_grad_()
+            m.alpha_opt[alpha_m].requires_grad_()
 
     return best_alphas
 
@@ -203,9 +205,7 @@ def _update_optimizable_activations(
         # Update best intermediate layer bounds only when they are optimized.
         # If they are already fixed in interm_bounds, then do
         # nothing.
-        if (interm_bounds is None
-                or node.inputs[0].name not in interm_bounds
-                or not fix_interm_bounds):
+        if (interm_bounds is None) or (node.inputs[0].name not in interm_bounds) or (not fix_interm_bounds):
             if deterministic:
                 best_intermediate_bounds[node.name][0][idx] = node.inputs[0].lower[reference_idx]
                 best_intermediate_bounds[node.name][1][idx] = node.inputs[0].upper[reference_idx]
@@ -220,8 +220,7 @@ def _update_optimizable_activations(
             # Each alpha has shape (2, output_shape, batch, *shape) for act.
             # For other activation function this can be different.
             for alpha_m in node.alpha:
-                best_alphas[node.name][alpha_m][:, :,
-                    idx] = node.alpha[alpha_m][:, :, idx]
+                best_alphas[node.name][alpha_m][:, :, idx] = node.alpha[alpha_m][:, :, idx]
 
 
 def update_best_beta(self: 'BoundedModule', enable_opt_interm_bounds, betas,
@@ -627,7 +626,7 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=[], method='backward',
                interm_bounds=None, activation_opt_params=None,
                skip_bound_compute=False):
     
-    # print(f'[+] init_alpha: {share_alphas=}')
+    print(f'[+] init_alpha: {share_alphas=}')
     # assert len(share_alphas)
     
     self(*x) # Do a forward pass to set perturbed nodes
@@ -675,13 +674,13 @@ def init_alpha(self: 'BoundedModule', x, share_alphas=[], method='backward',
         if method in ['forward', 'forward+backward']:
             start_nodes.append(('_forward', 1, None, False))
         if method in ['backward', 'forward+backward']:
-            node.options['optimize_bound_args']['use_shared_alpha'] = share_alphas
+            node.options['optimize_bound_args']['layer_shared_alpha'] = share_alphas
             backward_from_node = node
 
             start_nodes += self.get_alpha_crown_start_nodes(
                 node,
                 c=c,
-                share_alphas=share_alphas,
+                share_alphas=[], # TODO: generalize
                 final_node_name=final_node_name,
                 backward_from_node=backward_from_node
             )

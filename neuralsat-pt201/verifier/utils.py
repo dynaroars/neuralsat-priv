@@ -121,6 +121,8 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     elif np.prod(self.input_shape) >= 100000: # large inputs, e.g., VGG16
         self.input_split = True
         
+    return objectives, None # TODO: remove
+
     if self.input_split: 
         return objectives, None
     

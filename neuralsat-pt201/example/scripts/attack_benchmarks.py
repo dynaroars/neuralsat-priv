@@ -54,11 +54,9 @@ def parse_args():
     parser.add_argument('--model_name', required=True)
     parser.add_argument('--model_type', required=True)
     parser.add_argument('--benchmark_dir', default='example/generated_benchmark/')
-    parser.add_argument('--data_root', default='train/data')
-    parser.add_argument('--save_dir', default='train/weights')
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--seed', type=int, default=36)
-    parser.add_argument('--eps', type=float, default=0.01)
+    parser.add_argument('--eps', type=float, default=0.02)
     parser.add_argument('--timeout', type=float, default=1000.0)
 
     args = parser.parse_args()
@@ -69,7 +67,7 @@ def main():
     args = parse_args()
     torch.manual_seed(args.seed)
 
-    output_dir = os.path.join(args.benchmark_dir, args.model_type, f'eps_{args.eps:.06f}_{args.model_name}')
+    output_dir = os.path.join(args.benchmark_dir, args.model_type, args.model_name, f'eps_{args.eps:.06f}')
     in_csv_path = os.path.join(output_dir, 'instances.csv')
     out_csv_path = os.path.join(output_dir, 'unattacked_instances.csv')
     

@@ -29,6 +29,13 @@ from util.misc.timer import Timers
 
 from setting import Settings
 
+def get_used_gpu_memory():
+    device = torch.device('cuda:0')
+    free, total = torch.cuda.mem_get_info(device)
+    mem_used_MB = (total - free) / 1024 ** 2
+    torch.cuda.empty_cache()
+    return mem_used_MB
+
 
 class Verifier:
     
@@ -117,19 +124,20 @@ class Verifier:
             preconditions=preconditions,
             timeout=timeout,
             reference_bounds=reference_bounds,
-            max_domain=self.batch,
+            # max_domain=self.batch,
+            max_domain=1,
             share_alphas=share_alphas,
         )
         
-        if not status:
-            status = self._verify_with_restart(
-                dnf_objectives=copy.deepcopy(dnf_objectives),
-                preconditions=preconditions,
-                timeout=timeout,
-                reference_bounds=reference_bounds,
-                max_domain=1,
-                share_alphas=share_alphas,
-            )
+        # if not status:
+        #     status = self._verify_with_restart(
+        #         dnf_objectives=copy.deepcopy(dnf_objectives),
+        #         preconditions=preconditions,
+        #         timeout=timeout,
+        #         reference_bounds=reference_bounds,
+        #         max_domain=1,
+        #         share_alphas=share_alphas,
+        #     )
             
         return status
         
@@ -274,6 +282,8 @@ class Verifier:
             reference_bounds=reference_bounds, 
             share_alphas=share_alphas,
         )
+        print('[+] Post-init', get_used_gpu_memory())
+        
         Timers.toc('Initialization') if Settings.use_timer else None
                 
         # cleaning
@@ -292,6 +302,7 @@ class Verifier:
             # search
             Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
+            print('[+] Post-loop', get_used_gpu_memory())
             Timers.toc('Main loop') if Settings.use_timer else None
                 
             # check adv founded
@@ -312,7 +323,7 @@ class Verifier:
                 return ReturnStatus.RESTART
         
             # check unsolvable
-            if len(self.domains_list) > 100000:
+            if len(self.domains_list) > 5000: # FIXME: use larger numbers
                 return ReturnStatus.UNKNOWN
             
             # gpu tightening early stop

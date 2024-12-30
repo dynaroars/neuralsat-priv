@@ -30,13 +30,14 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         ref = self.inputs[0].lower # a reference variable for getting the shape
         batch_size = ref.size(0)
         self.alpha = OrderedDict()
+        self.alpha_opt = OrderedDict()
         self.alpha_lookup_idx = OrderedDict()  # For alpha with sparse spec dimention.
         self.alpha_indices = None  # indices of non-zero alphas.
         verbosity = self.options.get('verbosity', 0)
         # Alpha can be sparse in both spec dimension, and the C*H*W dimension.
         # We first deal with the sparse-feature alpha, which is sparse in the
         # C*H*W dimesnion of this layer.
-        minimum_sparsity = self.options.get('minimum_sparsity', 0.9)
+        minimum_sparsity = self.options.get('minimum_sparsity', 1.0)
         if (self.use_sparse_features_alpha and hasattr(self.inputs[0], 'lower') and hasattr(self.inputs[0], 'upper')):
             # Pre-activation bounds available, we will store the alpha for unstable neurons only.
             # Since each element in a batch can have different unstable neurons,
@@ -92,8 +93,23 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                 # For fully connected layer, or conv layer with shared alpha per channel.
                 # shape is (2, sparse_spec, batch, this_layer_shape)
                 # We create sparse specification dimension, where the spec dimension of alpha only includes slopes for unstable neurons in start_node.
-                self.alpha[ns] = torch.empty([self.alpha_size, sparsity + 1, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
-                self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, sparse_spec) dimensions.
+                # print(self.options['optimize_bound_args'].get('layer_shared_alpha', []), self.name)
+                if self.name in self.options['optimize_bound_args'].get('layer_shared_alpha', []):
+                    self.alpha_opt[ns] = torch.empty([self.alpha_size, 1, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
+                    self.alpha_opt[ns].data.copy_(alpha_init.data)
+                    print(f'[1] {self.alpha_opt[ns].data.shape=} {alpha_init.data.shape=}')
+                    self.alpha[ns] = self.alpha_opt[ns].expand(-1, sparsity + 1, -1, *[-1] * len(alpha_shape))
+                else:
+                    self.alpha_opt[ns] = torch.empty([self.alpha_size, sparsity + 1, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
+                    self.alpha_opt[ns].data.copy_(alpha_init.data)
+                    print(f'[2] {self.alpha_opt[ns].data.shape=} {alpha_init.data.shape=}')
+                    self.alpha[ns] = self.alpha_opt[ns]
+                
+                print(f'{self.alpha[ns].data.shape=} {self.alpha_opt[ns].data.shape=}')
+                # exit()
+                # self.alpha[ns] = torch.empty([self.alpha_size, sparsity + 1, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
+                # self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, sparse_spec) dimensions.
+                
                 if verbosity > 0:
                     print(f'layer {self.name} start_node {ns} using sparse-spec alpha {list(self.alpha[ns].size())}'
                           f' with unstable size {sparsity} total_size {size_s} output_shape {output_shape}')
@@ -122,8 +138,12 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
                     self.alpha_lookup_idx[ns].data[unstable_idx_3d[0], unstable_idx_3d[1], unstable_idx_3d[2]] = indices
             else:
                 # alpha shape is (2, spec, batch, this_layer_shape). "this_layer_shape" may still be sparse.
-                self.alpha[ns] = torch.empty([self.alpha_size, size_s, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
-                self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, spec) dimensions
+                self.alpha_opt[ns] = torch.empty([self.alpha_size, size_s, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
+                self.alpha_opt[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, spec) dimensions
+                self.alpha[ns] = self.alpha_opt[ns]
+                
+                # self.alpha[ns] = torch.empty([self.alpha_size, size_s, batch_size, *alpha_shape], dtype=torch.float, device=ref.device, requires_grad=True)
+                # self.alpha[ns].data.copy_(alpha_init.data)  # This will broadcast to (2, spec) dimensions
                 if verbosity > 0:
                     print(f'layer {self.name} start_node {ns} using full alpha {list(self.alpha[ns].size())} with unstable '
                           f'size {sparsity if unstable_idx is not None else None} total_size {size_s} output_shape {output_shape}')
@@ -224,6 +244,7 @@ class BoundTwoPieceLinear(BoundOptimizableActivation):
         assert hasattr(x, "lower")
         assert hasattr(x, "upper")
 
+        # print(f'\t- Backward from {start_node.name=} to {self.name:<15} {unstable_idx is not None=}')
         # Get element-wise CROWN linear relaxations.
         (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d, lb_upper_d, ub_upper_d, 
             alpha_lookup_idx) = self._backward_relaxation(last_lA, last_uA, x, start_node, unstable_idx)
@@ -330,6 +351,9 @@ class BoundRelu(BoundTwoPieceLinear):
     
     # TODO: torch compile
     def clip_alpha(self):
+        for v in self.alpha_opt.values():
+            v.data = torch.clamp(v.data, self.leaky_alpha, 1.)
+            
         for v in self.alpha.values():
             v.data = torch.clamp(v.data, self.leaky_alpha, 1.)
 
@@ -504,8 +528,7 @@ class BoundRelu(BoundTwoPieceLinear):
         if self.opt_stage in ['opt', 'reuse']:
             # Alpha-CROWN.
             lower_d = None
-            selected_alpha, alpha_lookup_idx = self.select_alpha_by_idx(last_lA, last_uA,
-                unstable_idx, start_node, alpha_lookup_idx)
+            selected_alpha, alpha_lookup_idx = self.select_alpha_by_idx(last_lA, last_uA, unstable_idx, start_node, alpha_lookup_idx)
             # The first dimension is lower/upper intermediate bound.
             if last_lA is not None:
                 lb_lower_d = selected_alpha[0]
@@ -518,11 +541,9 @@ class BoundRelu(BoundTwoPieceLinear):
                 sparse_alpha_shape = lb_lower_d.shape if lb_lower_d is not None else ub_lower_d.shape
                 full_alpha_shape = sparse_alpha_shape[:-1] + self.shape
                 if lb_lower_d is not None:
-                    lb_lower_d = self.reconstruct_full_alpha(
-                        lb_lower_d, full_alpha_shape, self.alpha_indices)
+                    lb_lower_d = self.reconstruct_full_alpha(lb_lower_d, full_alpha_shape, self.alpha_indices)
                 if ub_lower_d is not None:
-                    ub_lower_d = self.reconstruct_full_alpha(
-                        ub_lower_d, full_alpha_shape, self.alpha_indices)
+                    ub_lower_d = self.reconstruct_full_alpha(ub_lower_d, full_alpha_shape, self.alpha_indices)
 
             lb_lower_d, ub_lower_d, zero_coeffs = self._relu_mask_alpha(lower, upper, lb_lower_d, ub_lower_d)
             self.zero_backward_coeffs_l = self.zero_backward_coeffs_u = zero_coeffs
@@ -542,8 +563,7 @@ class BoundRelu(BoundTwoPieceLinear):
                 ub_lower_d = ub_lower_d.unsqueeze(0) if last_uA is not None else None
             else:
                 lower_d = lower_d.unsqueeze(0)
-        return (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d,
-            None, None, alpha_lookup_idx)
+        return (upper_d, upper_b, lower_d, lower_b, lb_lower_d, ub_lower_d, None, None, alpha_lookup_idx)
 
     def interval_propagate(self, *v):
         h_L, h_U = v[0][0], v[0][1]

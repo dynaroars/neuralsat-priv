@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument('--save_dir', default='train/weights')
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--epoch', type=int)
+    parser.add_argument('--simplify', action='store_true')
     parser.add_argument('--seed', type=int, default=36)
     parser.add_argument('--eps', type=float, default=0.01)
     parser.add_argument('--timeout', type=float, default=1000.0)
@@ -65,7 +66,7 @@ def main():
     args = parse_args()
     torch.manual_seed(args.seed)
     
-    output_dir = os.path.join(args.benchmark_dir, args.model_type, f'eps_{args.eps:.06f}_{args.model_name}')
+    output_dir = os.path.join(args.benchmark_dir, args.model_type, args.model_name, f'eps_{args.eps:.06f}')
     spec_dir = os.path.join(output_dir, 'spec')
     net_dir = os.path.join(output_dir, 'net')
     csv_path = os.path.join(output_dir, 'instances.csv')
@@ -123,6 +124,10 @@ def main():
         }
     )
     
+    if args.simplify:
+        cmd = f'onnxsim "{net_dir}/{args.model_name}.onnx" "{net_dir}/{args.model_name}.onnx"'
+        os.system(cmd)
+    
     dummy = torch.randn(10, 3, 32, 32).to(args.device)
     y1 = model(dummy)
     y2 = torch.from_numpy(inference_onnx(f'{net_dir}/{args.model_name}.onnx', dummy.detach().cpu().numpy())[0]).to(args.device)
@@ -176,6 +181,7 @@ def main():
                 data_ub=data_ub,
                 prediction=pred,
                 negate_spec=True,
+                seed=args.seed,
             )
             total += 1
         

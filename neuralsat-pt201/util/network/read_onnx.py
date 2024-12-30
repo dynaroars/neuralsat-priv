@@ -95,7 +95,7 @@ def _parse_onnx(path: str | io.BytesIO) -> tuple:
     if custom_quirks.get('Squeeze', {}).get('skip_last_layer', False):
         custom_quirks['Squeeze']['skip_last_layer'] = getattr(pytorch_model, 'is_last_removed', {}).get('Squeeze', False)
     
-    print(pytorch_model)
+    # print(pytorch_model)
     print('nhwc:', is_nhwc, batched_input_shape, batched_output_shape)
     
     # check conversion

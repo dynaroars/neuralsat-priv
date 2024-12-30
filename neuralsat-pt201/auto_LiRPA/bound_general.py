@@ -68,7 +68,7 @@ class BoundedModule(nn.Module):
             'tanh': {'loose_threshold': None},
             'fixed_reducemax_index': True,
             'matmul': {'share_alphas': False},
-            'minimum_sparsity': 0.9,
+            'minimum_sparsity': 1.0,
             'enable_opt_interm_bounds': False,
             'crown_batch_size': int(1e9),
             'forward_refinement': False,
@@ -818,7 +818,7 @@ class BoundedModule(nn.Module):
             return
 
         logger.debug(f'Getting the bounds of {node}')
-        # print(f'Getting the bounds of {node}')
+        # print(f'[+] Getting the bounds of {node}')
 
         if not prior_checked:
             self.check_prior_bounds(node)
@@ -902,6 +902,7 @@ class BoundedModule(nn.Module):
                         else:
                             # Compute backward bounds only when there are unstable
                             # neurons, or when we don't know which neurons are unstable.
+                            # print(f'Bound backward from {node.__class__.__name__}({node.name})')
                             node.lower, node.upper = self.backward_general(bound_node=node, C=newC, unstable_idx=unstable_idx)
                             # print(f'\t {node=}, {node.lower=}')
 
@@ -1338,7 +1339,7 @@ class BoundedModule(nn.Module):
         forward_general, forward_general_dynamic, forward_refinement, init_forward)
     from .backward_bound import (
         backward_general, get_sparse_C, concretize,
-        check_optimized_variable_sparsity, restore_sparse_bounds,
+        check_optimized_variable_sparsity, restore_sparse_bounds, _check_additional_sparsity,
         get_alpha_crown_start_nodes, get_unstable_locations, batched_backward,
         _preprocess_C)
     from .optimized_bounds import (
