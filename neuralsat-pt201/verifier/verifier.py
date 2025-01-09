@@ -30,6 +30,13 @@ from util.misc.timer import Timers
 from setting import Settings
 
 
+def get_used_gpu_memory():
+    device = torch.device('cuda:0')
+    free, total = torch.cuda.mem_get_info(device)
+    mem_used_MB = (total - free) / 1024 ** 2
+    torch.cuda.empty_cache()
+    return mem_used_MB
+
 class Verifier:
     
     "Branch-and-Bound verifier"
@@ -103,6 +110,7 @@ class Verifier:
         # refine
         Timers.tic('Preprocess') if Settings.use_timer else None
         dnf_objectives, reference_bounds = self._preprocess(dnf_objectives, force_split=force_split)
+        print(f'[+] verify _preprocess:', get_used_gpu_memory(), 'MB')
         Timers.toc('Preprocess') if Settings.use_timer else None
         if not len(dnf_objectives):
             return ReturnStatus.UNSAT
@@ -117,17 +125,17 @@ class Verifier:
             preconditions=preconditions,
             timeout=timeout,
             reference_bounds=reference_bounds,
-            max_domain=self.batch
+            max_domain=1,
         )
         
-        if not status:
-            status = self._verify_with_restart(
-                dnf_objectives=copy.deepcopy(dnf_objectives),
-                preconditions=preconditions,
-                timeout=timeout,
-                reference_bounds=reference_bounds,
-                max_domain=1
-            )
+        # if not status:
+        #     status = self._verify_with_restart(
+        #         dnf_objectives=copy.deepcopy(dnf_objectives),
+        #         preconditions=preconditions,
+        #         timeout=timeout,
+        #         reference_bounds=reference_bounds,
+        #         max_domain=1
+        #     )
             
         return status
         
@@ -257,6 +265,7 @@ class Verifier:
         Timers.tic('Initialization') if Settings.use_timer else None
         self.domains_list = self._initialize(objective=objective, preconditions=preconditions, reference_bounds=reference_bounds)
         Timers.toc('Initialization') if Settings.use_timer else None
+        print(f'[+] verify _initialize:', get_used_gpu_memory(), 'MB')
                 
         # cleaning
         torch.cuda.empty_cache()
@@ -275,6 +284,7 @@ class Verifier:
             Timers.tic('Main loop') if Settings.use_timer else None
             self._parallel_dpll()
             Timers.toc('Main loop') if Settings.use_timer else None
+            print(f'[+] verify _parallel_dpll:', get_used_gpu_memory(), 'MB')
                 
             # check adv founded
             if self.adv is not None:

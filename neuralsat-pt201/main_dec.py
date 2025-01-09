@@ -1,3 +1,4 @@
+import traceback
 import argparse
 import torch
 import time
@@ -18,6 +19,20 @@ from attacker.attacker import Attacker
 from setting import Settings
 
 
+def parse_pth(pth_path: str) -> tuple:
+    pytorch_model = torch.load(pth_path)
+    
+    input_shape = (1, 3, 32, 32)
+    output_shape = tuple(pytorch_model(torch.zeros(input_shape)).shape)
+    is_nhwc = False
+    
+    # check conversion
+    # correct_conversion = True
+    # assert correct_conversion
+
+    return pytorch_model, input_shape, output_shape, is_nhwc
+
+
 def print_w_b(model):
     for layer in model.modules():
         if hasattr(layer, 'weight'):
@@ -35,7 +50,7 @@ def main():
                         help="load pretrained ONNX model from this specified path.")
     parser.add_argument('--spec', type=str, required=True,
                         help="path to VNNLIB specification file.")
-    parser.add_argument('--batch', type=int, default=500,
+    parser.add_argument('--batch', type=int, default=200,
                         help="maximum number of branches to verify in each iteration")
     parser.add_argument('--timeout', type=float, default=3600,
                         help="timeout in seconds")
@@ -59,6 +74,9 @@ def main():
         Settings.setup_test()
     else:
         Settings.setup(args)
+    
+    Settings.setup_resnet_large(args)
+    # Settings.setup_resnet_small(args)
     
     print(Settings)
         
@@ -133,19 +151,31 @@ def main():
     verifier = DecompositionalVerifier(
         net=model,
         input_shape=input_shape,
-        min_layer=1,
+        min_layer=Settings.min_layer,
         device=args.device,
     )    
     
     Timers.tic('Verify') if Settings.use_timer else None
     timeout = args.timeout - (time.time() - START_TIME)
     
+    
     # verify
-    status, _ = verifier.decompositional_verify(
-        objectives=copy.deepcopy(dnf_objectives), 
-        timeout=timeout, 
-        batch=args.batch,
-    )
+    try:
+        if Settings.use_decompose:
+            status = verifier.decompositional_verify(
+                objectives=copy.deepcopy(dnf_objectives), 
+                timeout=timeout, 
+                batch=args.batch,
+            )
+        else:
+            status = verifier.original_verify(
+                objectives=copy.deepcopy(dnf_objectives), 
+                timeout=timeout, 
+                batch=args.batch,
+            )
+    except:
+        print(traceback.format_exc())
+        status = 'unknown'
     
     runtime = time.time() - START_TIME
     Timers.toc('Verify') if Settings.use_timer else None

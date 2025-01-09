@@ -57,11 +57,20 @@ class GlobalSettings:
         # motivation example
         self.test = 0
         
+        # preprocess
+        self.skip_preprocess = 0
+        
         # abstraction
         self.share_alphas = 0 
         self.backward_batch_size = np.inf
         self.forward_max_dim = 10000
         self.forward_dynamic = 0
+        
+        # decomposition
+        self.use_decompose = 0
+        self.init_abstraction_method = 'crown-optimized'
+        self.min_layer = 100
+        self.subverifier_decision_method = 'smart'
 
     def __getitem__(self, key):
         return self.__dict__[key]
@@ -101,8 +110,45 @@ class GlobalSettings:
         # self.restart_max_runtime = 20.0
         # self.forward_dynamic = 1
         # self.forward_max_dim = 100
-        self.share_alphas = 1 # sharing alphas may lose precision
+        self.share_alphas = 0 # sharing alphas may lose precision
             
+    
+    def setup_vae_small(self, args):
+        print('[+] setup_vae_small')
+        self.use_decompose = 1
+        self.min_layer = 1
+        self.share_alphas = 0 
+        self.init_abstraction_method = 'crown-optimized'
+        self.skip_preprocess = 1
+        
+        
+    def setup_vae_large(self, args):
+        print('[+] setup_vae_large')
+        self.use_decompose = 1
+        self.min_layer = 1
+        self.share_alphas = 1 # sharing alphas may lose precision
+        self.init_abstraction_method = 'crown-optimized'
+        self.subverifier_decision_method = 'greedy'
+        self.skip_preprocess = 1
+    
+    
+    def setup_resnet_small(self, args):
+        print('[+] setup_resnet_small')
+        self.use_decompose = 0
+        self.min_layer = 100
+        self.share_alphas = 1 # sharing alphas may lose precision
+        self.init_abstraction_method = 'backward'
+        self.skip_preprocess = 1
+        
+        
+    def setup_resnet_large(self, args):
+        print('[+] setup_resnet_large')
+        self.use_decompose = 1
+        self.min_layer = 6
+        self.share_alphas = 1 # sharing alphas may lose precision
+        self.init_abstraction_method = 'backward'
+        self.skip_preprocess = 1
+        
         
     def __repr__(self):
         return (
@@ -117,9 +163,15 @@ class GlobalSettings:
             f'\t- restart                                : {bool(self.use_restart)}\n'
             f'\t- stabilize (CPU)                        : {bool(self.use_mip_tightening)}\n'
             f'\t- stabilize (GPU)                        : {bool(self.use_gpu_tightening)}\n'
-            f'\t- share alphas                           : {bool(self.share_alphas)}\n'
             f'\t- assertion                              : {bool(os.environ.get("NEURALSAT_ASSERT"))}\n'
             f'\t- debug                                  : {bool(os.environ.get("NEURALSAT_DEBUG"))}\n'
+            f'\n[!] Decomposition:\n'
+            f'\t- use_decompose                          : {bool(self.use_decompose)}\n'
+            f'\t- share_alphas                           : {bool(self.share_alphas)}\n'
+            f'\t- skip_preprocess                        : {bool(self.skip_preprocess)}\n'
+            f'\t- min_layer                              : {self.min_layer}\n'
+            f'\t- init_abstraction_method                : {self.init_abstraction_method}\n'
+            f'\t- subverifier_decision_method            : {self.subverifier_decision_method}\n'
             f'\n'
         )
 

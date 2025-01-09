@@ -105,6 +105,9 @@ def _preprocess(self: verifier.verifier.Verifier, objectives: typing.Any, force_
     perturbed = (diff > 0).int().sum()
     logger.info(f'[!] eps={eps:.06f}, perturbed={perturbed}')
     
+    if Settings.skip_preprocess:
+        return objectives, None
+    
     if Settings.test:
         self.input_split = False
     elif force_split is not None:
@@ -290,8 +293,12 @@ def _setup_restart_naive(self: verifier.verifier.Verifier, nth_restart: int, obj
         params = {'input_split': True, 'abstract_method': 'backward', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
         # params = {'input_split': True, 'abstract_method': 'crown-optimized', 'decision_method': 'naive', 'decision_topk': 1, 'extra_opts': {'sparse_intermediate_bounds': True}}
     else:
-        # params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method':  'smart', 'decision_topk':  5, 'extra_opts': {'sparse_intermediate_bounds': True}}
-        params = {'input_split': False, 'abstract_method': 'crown-optimized', 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        if Settings.subverifier_decision_method == 'smart':
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method':  'smart', 'decision_topk':  5, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        elif Settings.subverifier_decision_method == 'greedy':
+            params = {'input_split': False, 'abstract_method': Settings.init_abstraction_method, 'decision_method': 'greedy', 'decision_topk': 1000, 'extra_opts': {'sparse_intermediate_bounds': True}}
+        else:
+            raise NotImplementedError
 
     logger.info(f'Params of {nth_restart+1}-th run: {params}')
 

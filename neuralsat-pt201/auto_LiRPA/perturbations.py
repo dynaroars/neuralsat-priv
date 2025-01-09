@@ -152,6 +152,7 @@ class PerturbationLpNorm(Perturbation):
         return x_L, x_U
 
     def extra_concretize_matrix(self, extra_x, extra_A, curr_A, sign):
+        
         assert sign in [-1, 1], f'Invalid {sign=}'
         extra_center = ((extra_x[1] + extra_x[0]) / 2.0).flatten(1).unsqueeze(-1)
         extra_diff   = ((extra_x[1] - extra_x[0]) / 2.0).flatten(1).unsqueeze(-1)
@@ -181,7 +182,7 @@ class PerturbationLpNorm(Perturbation):
         
         assert new_bias.size(-1) == 1, f'{new_A.size()=} {new_bias.size()=}'
         new_bound = new_bias + new_A.matmul(extra_center) + sign * new_A.abs().matmul(extra_diff)
-        # print(f'{sign=} {curr_A.shape=} {extra_A.lA.shape=} {new_bound.shape=}')
+        # print(f'[+] Extra bounds: {sign=} {curr_A.shape=} {extra_A.lA.shape=} {new_bound.shape=}')
         return new_bound.squeeze(-1)
     
     # TODO: torch compile

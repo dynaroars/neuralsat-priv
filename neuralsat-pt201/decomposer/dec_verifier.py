@@ -435,10 +435,12 @@ class DecompositionalVerifier:
         
     # @beartype
     def verify_one(self, objective: typing.Any, verify_batch: int, tighten_batch: int, timeout: int | float = 3600, use_extra: bool = True, interm_batch: int = 200) -> str:
+        self.iteration = 0
         self.start_time = time.time()
         self.reset()
         
-        lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method='crown-optimized', interm_batch=interm_batch)
+        lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method=Settings.init_abstraction_method, interm_batch=interm_batch)
+        print('[+] _init_interm_bounds:', lb.flatten())
         print('[+] _init_interm_bounds:', get_used_gpu_memory(), 'MB')
         
         # lb, _ = self._init_interm_bounds(objective, use_extra=use_extra, method='backward', interm_batch=interm_batch)
@@ -453,7 +455,6 @@ class DecompositionalVerifier:
         # release memory
         gc_cuda()
         
-        self.iteration = 0
         n_subnets = len(self.sub_networks)
         while True:
             print('[+] Iteration:', self.iteration)
@@ -526,11 +527,6 @@ class DecompositionalVerifier:
                 use_extra=True, # FIXME: only work with 2 subnets
                 interm_batch=interm_batch,
             )
-            if isinstance(status, str):
-                return status, 0.0 # TODO: remove
-            return status
-            break # TODO: remove
-            
             if status in [ReturnStatus.SAT, ReturnStatus.TIMEOUT, ReturnStatus.UNKNOWN]:
                 return status 
             if status == ReturnStatus.UNSAT:
@@ -542,7 +538,7 @@ class DecompositionalVerifier:
     
     @beartype
     def original_verify(self, objectives: DnfObjectives, timeout: int | float = 3600, batch: int = 500) -> str:
-        
+        self.iteration = 0
         verifier = Verifier(
             net=self.net,
             input_shape=self.input_shape,
@@ -554,6 +550,7 @@ class DecompositionalVerifier:
             timeout=timeout, 
             force_split=None,
         )
+        print(f'[+] verify:', get_used_gpu_memory(), 'MB')
         
         return status
         
