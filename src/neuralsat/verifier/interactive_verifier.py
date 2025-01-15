@@ -105,25 +105,46 @@ class InteractiveVerifier:
         self.domains_list.add(abstraction_ret, decisions)
         done = len(self.domains_list) == 0
 
+        # reward = self.domains_list.minimum_lowers
+        # given action (selected neuron)
+        # return minimum lowerbound on two branches of that neuron
+        reward = abstraction_ret.output_lbs.min(dim=-1).values
+        r1, r2 = torch.chunk(reward, 2)
+        reward, reward_indices = torch.min(torch.stack((r1, r2)), dim=0)
+        #
+        split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
+                                                             domain_params=abstraction_ret)
+
         info = {
             'worst_bound': self.domains_list.minimum_lowers,
             'visited': self.domains_list.visited,
             'remaining': len(self.domains_list),
             'pick_ret': pick_ret, # subproblem before
             'abstraction_ret': abstraction_ret, # subproblem after
+            'split_observation': split_observation,
+            'reward_indices': reward_indices,
         }
-
-        # reward = self.domains_list.minimum_lowers
-        # given action (selected neuron)
-        # return minimum lowerbound on two branches of that neuron
-        reward = abstraction_ret.output_lbs.min(dim=-1).values
-        r1, r2 = torch.chunk(reward, 2)
-        reward = torch.minimum(r1, r2)
-
-        #
-        split_observation = self.scorer.get_branching_scores(abstractor=self.abstractor,
-                                                             domain_params=abstraction_ret)
-
-        return split_observation, reward, done, info
+        return reward, done, info
 
     from .utils import _preprocess, _init_abstractor, _setup_restart
+
+
+
+
+    '''
+    - [ ] Input: n subproblem step t
+    - [ ] Output: 2n subproblem at most
+
+    '''
+
+
+
+
+
+
+
+
+
+
+
+    # comment
