@@ -1,7 +1,7 @@
 # NeuralSAT: A DPLL(T) Framework for Verifying Deep Neural Networks
 
 
-*NeuralSAT* is a high-performance verification tool for deep neural networks (DNNs).  It integrates the DPLL(T) approach commonly used in SMT solving with a theory solver specialized for DNN reasoning. NeuralSAT exploits multicores and GPU for efficiency and can scale to networks with millions of parameters.  It also supports a wide range of neural networks and activation functions.
+*NeuralSAT* is a high-performance verification tool for deep neural networks (DNNs).  It integrates the DPLL(T) approach commonly used in SMT solving with a theory solver specialized for DNN reasoning. NeuralSAT exploits multicores and GPU for efficiency and can scale to networks with millions of parameters.  It supports a wide range of neural networks and activation functions.  
 
 
 ## NEWS
