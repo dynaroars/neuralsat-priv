@@ -6,7 +6,7 @@
 
 ## NEWS
 - NeuralSAT is ranked **2nd overall at VNN-COMP'24** (our 2nd participation)
-  - Originally, VNN-COMP’s script had a bug that incorrectly parsed NeuralSAT’s (and another tool’s) results, and ranked it last. After fixing the issue, NeuralSAT’s results were correctly parsed and NeuralSAT was officially placed 2nd, behind ABCrown and above PyRAT. The updated VNN-COMP’24 report, available [here](https://www.arxiv.org/pdf/2412.19985), acknowledges the issue, presents the corrected rankings (see Table B.1), and includes detailed results and graphs in Appendix B.</li>
+  - Initially VNN-COMP’s script incorrectly parsed NeuralSAT’s (and another tool’s) results, and ranked it last. After fixing the issue, NeuralSAT’s results were correctly parsed and NeuralSAT was officially placed 2nd, behind ABCrown and above PyRAT. The updated VNN-COMP’24 report, available [here](https://www.arxiv.org/pdf/2412.19985), mentions the issue, presents the corrected rankings (see Table B.1), and includes detailed results and graphs in Appendix B.</li>
 - [First paper](https://dynaroars.github.io/pubs/duong2024harnessing.pdf) on NeuralSAT will be at FSE'24!
 - NeuralSAT is given the "New Participation Award" at VNN-COMP'23
 - NeuralSAT is ranked **4th in VNN-COMP'23**.  This was our first participation and we look forward to next time.
